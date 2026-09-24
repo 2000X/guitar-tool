@@ -46,6 +46,9 @@
       { key: 'scale-root-ring',  label: '音阶根音描边（实线圈）', light: '#1f2328', dark: '#e7e7e7' },
       { key: 'outside-mark',     label: '调外音标记（虚线圈）',   light: '#bf3989', dark: '#f778ba' }
     ]},
+    { name: '音阶特征音（调式、和声/旋律小调）', items: [
+      { key: 'char-ring',        label: '特征音描边（实线粗圈）', light: '#c8960c', dark: '#e3b341' }
+    ]},
     { name: '顺阶和弦按钮', items: [
       { key: 'dia-active',      label: '当前和弦按钮底色',   light: '#1f2328', dark: '#e7e7e7' },
       { key: 'dia-active-text', label: '当前和弦按钮文字',   light: '#ffffff', dark: '#1d2024' }

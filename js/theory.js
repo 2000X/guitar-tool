@@ -107,14 +107,29 @@
   }
 
   // ---------------- 音阶 ----------------
+  // group：下拉框里的分组；label：下拉框里显示的名字（调式附英文名，方便对照资料）
   // roles 可以单独指定某个音级的角色（如布鲁斯的 ♭5 是“蓝调音”，不算五音）
   // parent 是“母音阶”：五声、布鲁斯不是七声音阶，顺阶和弦按母音阶来算
+  // modeOf：是大调的第几个调式（关系说明：D 多利亚 = C 大调从第 2 个音开始）
+  // character + compare：特征音 = 和 compare 音阶相比不一样的音（v0.5，指板上加特殊描边）
+  var SCALE_GROUPS = [
+    { id: 'basic', name: '大调与小调' },
+    { id: 'mode',  name: '调式' },
+    { id: 'penta', name: '五声与布鲁斯' }
+  ];
   var SCALES = [
-    { id: 'major',            name: '大调',     degrees: ['1', '2', '3', '4', '5', '6', '7'] },
-    { id: 'natural-minor',    name: '自然小调', degrees: ['1', '2', '♭3', '4', '5', '♭6', '♭7'] },
-    { id: 'major-pentatonic', name: '大调五声', degrees: ['1', '2', '3', '5', '6'], parent: 'major' },
-    { id: 'minor-pentatonic', name: '小调五声', degrees: ['1', '♭3', '4', '5', '♭7'], parent: 'natural-minor' },
-    { id: 'blues',            name: '布鲁斯',   degrees: ['1', '♭3', '4', '♭5', '5', '♭7'], roles: { '♭5': 'other' }, parent: 'natural-minor' }
+    { id: 'major',            name: '大调',     label: '大调（伊奥尼亚 Ionian）', group: 'basic', degrees: ['1', '2', '3', '4', '5', '6', '7'] },
+    { id: 'natural-minor',    name: '自然小调', label: '自然小调（爱奥利亚 Aeolian）', group: 'basic', degrees: ['1', '2', '♭3', '4', '5', '♭6', '♭7'], modeOf: 6 },
+    { id: 'harmonic-minor',   name: '和声小调', label: '和声小调', group: 'basic', degrees: ['1', '2', '♭3', '4', '5', '♭6', '7'], character: ['7'], compare: 'natural-minor' },
+    { id: 'melodic-minor',    name: '旋律小调', label: '旋律小调', group: 'basic', degrees: ['1', '2', '♭3', '4', '5', '6', '7'], character: ['6', '7'], compare: 'natural-minor' },
+    { id: 'dorian',           name: '多利亚',   label: '多利亚 Dorian', group: 'mode', degrees: ['1', '2', '♭3', '4', '5', '6', '♭7'], modeOf: 2, character: ['6'], compare: 'natural-minor' },
+    { id: 'phrygian',         name: '弗里几亚', label: '弗里几亚 Phrygian', group: 'mode', degrees: ['1', '♭2', '♭3', '4', '5', '♭6', '♭7'], modeOf: 3, character: ['♭2'], compare: 'natural-minor' },
+    { id: 'lydian',           name: '利底亚',   label: '利底亚 Lydian', group: 'mode', degrees: ['1', '2', '3', '♯4', '5', '6', '7'], modeOf: 4, character: ['♯4'], compare: 'major' },
+    { id: 'mixolydian',       name: '混合利底亚', label: '混合利底亚 Mixolydian', group: 'mode', degrees: ['1', '2', '3', '4', '5', '6', '♭7'], modeOf: 5, character: ['♭7'], compare: 'major' },
+    { id: 'locrian',          name: '洛克里亚', label: '洛克里亚 Locrian', group: 'mode', degrees: ['1', '♭2', '♭3', '4', '♭5', '♭6', '♭7'], modeOf: 7, character: ['♭5'], compare: 'natural-minor' },
+    { id: 'major-pentatonic', name: '大调五声', label: '大调五声', group: 'penta', degrees: ['1', '2', '3', '5', '6'], parent: 'major' },
+    { id: 'minor-pentatonic', name: '小调五声', label: '小调五声', group: 'penta', degrees: ['1', '♭3', '4', '5', '♭7'], parent: 'natural-minor' },
+    { id: 'blues',            name: '布鲁斯',   label: '布鲁斯', group: 'penta', degrees: ['1', '♭3', '4', '♭5', '5', '♭7'], roles: { '♭5': 'other' }, parent: 'natural-minor' }
   ];
 
   // 可选的根音（17 种写法）
@@ -134,9 +149,30 @@
       return {
         degree: parseDegree(deg).text, name: n.name, pc: n.pc,
         interval: intervalName(deg),
-        role: (sc.roles && sc.roles[deg]) || roleOf(deg)
+        role: (sc.roles && sc.roles[deg]) || roleOf(deg),
+        character: !!(sc.character && sc.character.indexOf(deg) >= 0) // 特征音（v0.5）
       };
     });
+  }
+
+  // 音阶的补充说明（v0.5）：
+  //   relation：调式和大调的关系。例如 D 多利亚 → { root: 'C', simple: 'C', step: 2 }（= C 大调从第 2 个音开始）
+  //             root 按字母严格拼写（和音阶里的音一致），可能是 A𝄫 这种理论写法，simple 是常用写法
+  //   character：特征音，每项 { degree, name, pc, diff }，diff = 比 compare 音阶高（+1）还是低（-1）半音
+  function scaleInfo(rootName, scaleId) {
+    var sc = getScale(scaleId), out = { relation: null, character: [], compare: sc.compare || null };
+    if (sc.modeOf) {
+      // 从调式根音往上数到“母大调”根音的音级：第 2 个调式 → 往上 ♭7，第 3 个 → ♭6 ……
+      var up = { 2: '♭7', 3: '♭6', 4: '5', 5: '4', 6: '♭3', 7: '♭2' }[sc.modeOf];
+      var p = spellDegree(rootName, up);
+      out.relation = { root: p.name, simple: simplifyNote(p.name), scale: 'major', step: sc.modeOf };
+    }
+    (sc.character || []).forEach(function (deg) {
+      var d = parseDegree(deg), n = spellDegree(rootName, deg);
+      var cmp = getScale(sc.compare).degrees.map(parseDegree).filter(function (x) { return x.number === d.number; })[0];
+      out.character.push({ degree: d.text, name: n.name, pc: n.pc, diff: d.alter - cmp.alter });
+    });
+    return out;
   }
 
   // 在一组音里找某个音高（找不到返回 null）
@@ -440,14 +476,14 @@
       var c = findByPc(cn, pc), sc = findByPc(sn, pc);
       if (!c && !sc) continue;
       if (!cn.length) {
-        out[pc] = { kind: 'scale', name: sc.name, degree: sc.degree, interval: sc.interval, role: sc.role, outside: false, scaleRoot: false };
+        out[pc] = { kind: 'scale', name: sc.name, degree: sc.degree, interval: sc.interval, role: sc.role, outside: false, scaleRoot: false, character: sc.character };
       } else if (c) {
         out[pc] = { kind: 'chord', name: c.name, degree: c.degree, interval: c.interval, role: c.role,
-          outside: sn.length > 0 && !sc, scaleRoot: !!(sc && sc.degree === '1') };
+          outside: sn.length > 0 && !sc, scaleRoot: !!(sc && sc.degree === '1'), character: !!(sc && sc.character) };
       } else {
         var d = degreeBetween(chordRoot, sc.name);
         out[pc] = { kind: 'muted', name: sc.name, degree: d || sc.name, interval: d ? intervalName(d) : sc.name,
-          role: 'muted', outside: false, scaleRoot: sc.degree === '1' };
+          role: 'muted', outside: false, scaleRoot: sc.degree === '1', character: sc.character };
       }
     }
     return out;
@@ -471,6 +507,8 @@
     intervalName: intervalName,
     roleOf: roleOf,
     SCALES: SCALES,
+    SCALE_GROUPS: SCALE_GROUPS,
+    scaleInfo: scaleInfo,
     ROOTS: ROOTS,
     getScale: getScale,
     scaleNotes: scaleNotes,

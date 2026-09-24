@@ -152,22 +152,31 @@
     });
 
     // ---------- 全面检查：17 个根音 × 5 种音阶 ----------
-    G = '全面检查：17 个根音 × 5 种音阶';
+    G = '全面检查：17 个根音 × 12 种音阶';
     safe(G, '全部组合', function () {
       // 独立写的标准：每种音阶相对根音的半音数、字母相隔几个
       var SEMI = { 'major': [0, 2, 4, 5, 7, 9, 11], 'natural-minor': [0, 2, 3, 5, 7, 8, 10],
-        'major-pentatonic': [0, 2, 4, 7, 9], 'minor-pentatonic': [0, 3, 5, 7, 10], 'blues': [0, 3, 5, 6, 7, 10] };
+        'major-pentatonic': [0, 2, 4, 7, 9], 'minor-pentatonic': [0, 3, 5, 7, 10], 'blues': [0, 3, 5, 6, 7, 10],
+        // v0.5 新增
+        'harmonic-minor': [0, 2, 3, 5, 7, 8, 11], 'melodic-minor': [0, 2, 3, 5, 7, 9, 11],
+        'dorian': [0, 2, 3, 5, 7, 9, 10], 'phrygian': [0, 1, 3, 5, 7, 8, 10], 'lydian': [0, 2, 4, 6, 7, 9, 11],
+        'mixolydian': [0, 2, 4, 5, 7, 9, 10], 'locrian': [0, 1, 3, 5, 6, 8, 10] };
+      var SEVEN = [0, 1, 2, 3, 4, 5, 6];
       var STEP = { 'major': [0, 1, 2, 3, 4, 5, 6], 'natural-minor': [0, 1, 2, 3, 4, 5, 6],
-        'major-pentatonic': [0, 1, 2, 4, 5], 'minor-pentatonic': [0, 2, 3, 4, 6], 'blues': [0, 2, 3, 4, 4, 6] };
+        'major-pentatonic': [0, 1, 2, 4, 5], 'minor-pentatonic': [0, 2, 3, 4, 6], 'blues': [0, 2, 3, 4, 4, 6],
+        'harmonic-minor': SEVEN, 'melodic-minor': SEVEN, 'dorian': SEVEN, 'phrygian': SEVEN, 'lydian': SEVEN, 'mixolydian': SEVEN, 'locrian': SEVEN };
+      // 下拉框里的顺序（按分组：大调与小调 / 调式 / 五声与布鲁斯）
+      var ORDER = ['major', 'natural-minor', 'harmonic-minor', 'melodic-minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'locrian',
+        'major-pentatonic', 'minor-pentatonic', 'blues'];
       var LET = 'CDEFGAB', PCS = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
       var ACC = { '': 0, '♭': -1, '𝄫': -2, '♯': 1, '𝄪': 2 };
       var ROOTS17 = ['C', 'C♯', 'D♭', 'D', 'D♯', 'E♭', 'E', 'F', 'F♯', 'G♭', 'G', 'G♯', 'A♭', 'A', 'A♯', 'B♭', 'B'];
       check(G, '可选根音正好是这 17 个', T.ROOTS, ROOTS17);
-      check(G, '音阶正好是这 5 种', T.SCALES.map(function (x) { return x.id; }), Object.keys(SEMI));
+      check(G, '音阶正好是这 12 种（原 5 种 + v0.5 新增 7 种）', T.SCALES.map(function (x) { return x.id; }), ORDER);
       var badPc = [], badLetter = [], badAcc = [], count = 0;
       ROOTS17.forEach(function (root) {
         var rl = root[0], rpc = (PCS[rl] + ACC[root.slice(1)] + 12) % 12;
-        Object.keys(SEMI).forEach(function (sc) {
+        ORDER.forEach(function (sc) {
           var ns = T.scaleNotes(root, sc);
           ns.forEach(function (n, i) {
             count++;
@@ -363,7 +372,7 @@
       check(G, '常用写法保持不变：C♯、D♭、G♭、A♯', ['C♯', 'D♭', 'G♭', 'A♯'].map(T.simplifyNote), ['C♯', 'D♭', 'G♭', 'A♯']);
     });
 
-    G = '全面检查：17 个根音 × 大调/自然小调的顺阶和弦';
+    G = '全面检查：17 个根音 × 9 种七声音阶的顺阶和弦';
     safe(G, '全部组合', function () {
       var ROOTS17 = ['C', 'C♯', 'D♭', 'D', 'D♯', 'E♭', 'E', 'F', 'F♯', 'G♭', 'G', 'G♯', 'A♭', 'A', 'A♯', 'B♭', 'B'];
       // 独立写的标准：大调、自然小调每一级的和弦类型和罗马数字
@@ -371,11 +380,26 @@
         'major': { 3: ['maj', 'm', 'm', 'maj', 'maj', 'm', 'dim'], 4: ['maj7', 'm7', 'm7', 'maj7', '7', 'm7', 'm7b5'],
           r3: ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'], r4: ['Imaj7', 'ii7', 'iii7', 'IVmaj7', 'V7', 'vi7', 'viiø7'] },
         'natural-minor': { 3: ['m', 'dim', 'maj', 'm', 'm', 'maj', 'maj'], 4: ['m7', 'm7b5', 'maj7', 'm7', 'm7', 'maj7', '7'],
-          r3: ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'], r4: ['i7', 'iiø7', 'IIImaj7', 'iv7', 'v7', 'VImaj7', 'VII7'] }
+          r3: ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'], r4: ['i7', 'iiø7', 'IIImaj7', 'iv7', 'v7', 'VImaj7', 'VII7'] },
+        // v0.5 新增
+        'harmonic-minor': { 3: ['m', 'dim', 'aug', 'm', 'maj', 'maj', 'dim'], 4: ['mMaj7', 'm7b5', 'maj7s5', 'm7', '7', 'maj7', 'dim7'],
+          r3: ['i', 'ii°', 'III+', 'iv', 'V', 'VI', 'vii°'], r4: ['i(maj7)', 'iiø7', 'III+maj7', 'iv7', 'V7', 'VImaj7', 'vii°7'] },
+        'melodic-minor': { 3: ['m', 'm', 'aug', 'maj', 'maj', 'dim', 'dim'], 4: ['mMaj7', 'm7', 'maj7s5', '7', '7', 'm7b5', 'm7b5'],
+          r3: ['i', 'ii', 'III+', 'IV', 'V', 'vi°', 'vii°'], r4: ['i(maj7)', 'ii7', 'III+maj7', 'IV7', 'V7', 'viø7', 'viiø7'] },
+        'dorian': { 3: ['m', 'm', 'maj', 'maj', 'm', 'dim', 'maj'], 4: ['m7', 'm7', 'maj7', '7', 'm7', 'm7b5', 'maj7'],
+          r3: ['i', 'ii', 'III', 'IV', 'v', 'vi°', 'VII'], r4: ['i7', 'ii7', 'IIImaj7', 'IV7', 'v7', 'viø7', 'VIImaj7'] },
+        'phrygian': { 3: ['m', 'maj', 'maj', 'm', 'dim', 'maj', 'm'], 4: ['m7', 'maj7', '7', 'm7', 'm7b5', 'maj7', 'm7'],
+          r3: ['i', 'II', 'III', 'iv', 'v°', 'VI', 'vii'], r4: ['i7', 'IImaj7', 'III7', 'iv7', 'vø7', 'VImaj7', 'vii7'] },
+        'lydian': { 3: ['maj', 'maj', 'm', 'dim', 'maj', 'm', 'm'], 4: ['maj7', '7', 'm7', 'm7b5', 'maj7', 'm7', 'm7'],
+          r3: ['I', 'II', 'iii', 'iv°', 'V', 'vi', 'vii'], r4: ['Imaj7', 'II7', 'iii7', 'ivø7', 'Vmaj7', 'vi7', 'vii7'] },
+        'mixolydian': { 3: ['maj', 'm', 'dim', 'maj', 'm', 'm', 'maj'], 4: ['7', 'm7', 'm7b5', 'maj7', 'm7', 'm7', 'maj7'],
+          r3: ['I', 'ii', 'iii°', 'IV', 'v', 'vi', 'VII'], r4: ['I7', 'ii7', 'iiiø7', 'IVmaj7', 'v7', 'vi7', 'VIImaj7'] },
+        'locrian': { 3: ['dim', 'maj', 'm', 'm', 'maj', 'maj', 'm'], 4: ['m7b5', 'maj7', 'm7', 'm7', 'maj7', '7', 'm7'],
+          r3: ['i°', 'II', 'iii', 'iv', 'V', 'VI', 'vii'], r4: ['iø7', 'IImaj7', 'iii7', 'iv7', 'Vmaj7', 'VI7', 'vii7'] }
       };
       var badType = [], badRoman = [], badRoot = [], badNotes = [], count = 0;
       ROOTS17.forEach(function (root) {
-        ['major', 'natural-minor'].forEach(function (sc) {
+        Object.keys(EXPECT).forEach(function (sc) {
           var scaleNames = T.scaleNotes(root, sc).map(function (n) { return n.name; });
           [3, 4].forEach(function (size) {
             var list = T.diatonicChords(root, sc, size);
@@ -482,6 +506,106 @@
       var dropD = [{ string: 1, name: 'E', midi: 64 }, { string: 2, name: 'B', midi: 59 }, { string: 3, name: 'G', midi: 55 },
         { string: 4, name: 'D', midi: 50 }, { string: 5, name: 'A', midi: 45 }, { string: 6, name: 'D', midi: 38 }];
       check(G, '调弦作为参数：Drop D 下 000xxx（D A D）→ D5；标准调弦下（E A D）不是 D5', [top('000xxx', { tuning: dropD }), top('000xxx') !== 'D5'], ['D5', true]);
+    });
+
+    // ---------- v0.5 更多音阶：标准答案（全部独立写死，不借用 theory.js 的数据） ----------
+    G = 'v0.5 更多音阶（标准答案）';
+    safe(G, '音阶', function () {
+      var BOOK = [
+        ['D', 'dorian', 'D E F G A B C'], ['C', 'dorian', 'C D E♭ F G A B♭'], ['A', 'dorian', 'A B C D E F♯ G'],
+        ['E', 'phrygian', 'E F G A B C D'], ['A', 'phrygian', 'A B♭ C D E F G'],
+        ['F', 'lydian', 'F G A B C D E'], ['C', 'lydian', 'C D E F♯ G A B'], ['G', 'lydian', 'G A B C♯ D E F♯'],
+        ['G', 'mixolydian', 'G A B C D E F'], ['A', 'mixolydian', 'A B C♯ D E F♯ G'], ['E', 'mixolydian', 'E F♯ G♯ A B C♯ D'],
+        ['B', 'locrian', 'B C D E F G A'], ['E', 'locrian', 'E F G A B♭ C D'],
+        ['A', 'harmonic-minor', 'A B C D E F G♯'], ['E', 'harmonic-minor', 'E F♯ G A B C D♯'], ['D♯', 'harmonic-minor', 'D♯ E♯ F♯ G♯ A♯ B C𝄪'],
+        ['A', 'melodic-minor', 'A B C D E F♯ G♯'], ['C', 'melodic-minor', 'C D E♭ F G A B']
+      ];
+      var CN = { 'dorian': '多利亚', 'phrygian': '弗里几亚', 'lydian': '利底亚', 'mixolydian': '混合利底亚', 'locrian': '洛克里亚',
+        'harmonic-minor': '和声小调', 'melodic-minor': '旋律小调' };
+      BOOK.forEach(function (x) { check(G, x[0] + ' ' + CN[x[1]] + ' = ' + x[2], names(x[0], x[1]).join(' '), x[2]); });
+      check(G, '利底亚的 ♯4 写 ♯4 / A4，灰色（其他音）', T.scaleNotes('C', 'lydian').map(function (n) { return n.degree + '/' + n.interval + '/' + n.role; })[3], '♯4/A4/other');
+      check(G, '洛克里亚的 ♭5 写 ♭5 / d5', T.scaleNotes('B', 'locrian').map(function (n) { return n.degree + '/' + n.interval; })[4], '♭5/d5');
+      check(G, '和声小调的 7 是七音（紫色）', T.scaleNotes('A', 'harmonic-minor')[6].role, 'seventh');
+      check(G, '下拉框分组：每个音阶都有分组，分组都存在', T.SCALES.filter(function (s) {
+        return !T.SCALE_GROUPS.some(function (g) { return g.id === s.group; });
+      }).map(function (s) { return s.id; }), []);
+    });
+    safe(G, '特征音', function () {
+      var ch = function (root, sc) { return T.scaleInfo(root, sc).character.map(function (c) { return c.degree + ':' + c.name + ':' + (c.diff > 0 ? '高' : '低'); }).join(' '); };
+      check(G, 'D 多利亚：6 = B，比自然小调高半音', ch('D', 'dorian'), '6:B:高');
+      check(G, 'E 弗里几亚：♭2 = F，比自然小调低半音', ch('E', 'phrygian'), '♭2:F:低');
+      check(G, 'F 利底亚：♯4 = B，比大调高半音', ch('F', 'lydian'), '♯4:B:高');
+      check(G, 'G 混合利底亚：♭7 = F，比大调低半音', ch('G', 'mixolydian'), '♭7:F:低');
+      check(G, 'B 洛克里亚：♭5 = F，比自然小调低半音', ch('B', 'locrian'), '♭5:F:低');
+      check(G, 'A 和声小调：7 = G♯', ch('A', 'harmonic-minor'), '7:G♯:高');
+      check(G, 'A 旋律小调：6 = F♯、7 = G♯', ch('A', 'melodic-minor'), '6:F♯:高 7:G♯:高');
+      check(G, '和谁比：多利亚/弗里几亚/洛克里亚/和声/旋律小调 → 自然小调；利底亚/混合利底亚 → 大调',
+        ['dorian', 'phrygian', 'locrian', 'harmonic-minor', 'melodic-minor', 'lydian', 'mixolydian'].map(function (s) { return T.scaleInfo('C', s).compare; }),
+        ['natural-minor', 'natural-minor', 'natural-minor', 'natural-minor', 'natural-minor', 'major', 'major']);
+      check(G, '大调、自然小调、五声、布鲁斯没有特征音',
+        ['major', 'natural-minor', 'major-pentatonic', 'minor-pentatonic', 'blues'].map(function (s) { return T.scaleInfo('C', s).character.length; }), [0, 0, 0, 0, 0]);
+      check(G, 'scaleNotes 标出特征音：C 多利亚只有 A', T.scaleNotes('C', 'dorian').filter(function (n) { return n.character; }).map(function (n) { return n.name; }), ['A']);
+      var m = T.combine('D', 'dorian', 'D', 'm7');
+      check(G, 'D 多利亚 + Dm7：B（淡色）仍标特征音，和弦音 D F A C 不是', [m[11].kind, m[11].character, m[2].character, m[5].character, m[9].character, m[0].character],
+        ['muted', true, false, false, false, false]);
+      var m2 = T.combine('A', 'harmonic-minor', 'E', '7');
+      check(G, 'A 和声小调 + E7：G♯ 是和弦音、特征音、不是调外音', [m2[8].kind, m2[8].character, m2[8].outside], ['chord', true, false]);
+      var m3 = T.combine('F', 'lydian', 'none', 'none');
+      check(G, '只开 F 利底亚：B 标特征音', [m3[11].kind, m3[11].character, m3[5].character], ['scale', true, false]);
+    });
+    safe(G, '关系说明', function () {
+      var rel = function (root, sc) { var r = T.scaleInfo(root, sc).relation; return r ? r.root + '/' + r.simple + '/' + r.step : null; };
+      check(G, 'D 多利亚 = C 大调第 2 个音', rel('D', 'dorian'), 'C/C/2');
+      check(G, 'E 弗里几亚 = C 大调第 3 个音', rel('E', 'phrygian'), 'C/C/3');
+      check(G, 'F 利底亚 = C 大调第 4 个音', rel('F', 'lydian'), 'C/C/4');
+      check(G, 'G 混合利底亚 = C 大调第 5 个音', rel('G', 'mixolydian'), 'C/C/5');
+      check(G, 'A 自然小调 = C 大调第 6 个音', rel('A', 'natural-minor'), 'C/C/6');
+      check(G, 'B 洛克里亚 = C 大调第 7 个音', rel('B', 'locrian'), 'C/C/7');
+      check(G, 'C 多利亚 = B♭ 大调；A 混合利底亚 = D 大调；E♭ 利底亚 = B♭ 大调；F♯ 洛克里亚 = G 大调',
+        [rel('C', 'dorian'), rel('A', 'mixolydian'), rel('E♭', 'lydian'), rel('F♯', 'locrian')], ['B♭/B♭/2', 'D/D/5', 'B♭/B♭/4', 'G/G/7']);
+      check(G, '理论调：G♭ 洛克里亚 = A𝄫 大调（同音 G）；E♭ 洛克里亚 = F♭ 大调（同音 E）',
+        [rel('G♭', 'locrian'), rel('E♭', 'locrian')], ['A𝄫/G/7', 'F♭/E/7']);
+      check(G, '大调、和声小调、旋律小调、五声、布鲁斯没有关系说明',
+        ['major', 'harmonic-minor', 'melodic-minor', 'major-pentatonic', 'minor-pentatonic', 'blues'].map(function (s) { return rel('C', s); }), [null, null, null, null, null, null]);
+      // 关系成立：调式的音和母大调的音完全一样（拼写也一样）
+      var bad = [];
+      ['C', 'C♯', 'D♭', 'D', 'D♯', 'E♭', 'E', 'F', 'F♯', 'G♭', 'G', 'G♯', 'A♭', 'A', 'A♯', 'B♭', 'B'].forEach(function (r) {
+        ['natural-minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'locrian'].forEach(function (sc) {
+          var info = T.scaleInfo(r, sc).relation;
+          var a = names(r, sc).slice().sort().join(' '), b;
+          try { b = names(info.root, 'major').slice().sort().join(' '); } catch (e) { b = '出错'; }
+          if (a !== b || names(info.root, 'major')[info.step - 1] !== r) bad.push(r + ' ' + sc);
+        });
+      });
+      check(G, '17 个根音 × 6 个调式：音和母大调完全一样，且从第几个音开始正确', bad, []);
+    });
+    safe(G, '顺阶和弦', function () {
+      var BOOK = [
+        ['A', 'harmonic-minor', 3, 'i Am | ii° Bdim | III+ Caug | iv Dm | V E | VI F | vii° G♯dim'],
+        ['A', 'harmonic-minor', 4, 'i(maj7) Am(maj7) | iiø7 Bm7♭5 | III+maj7 Cmaj7♯5 | iv7 Dm7 | V7 E7 | VImaj7 Fmaj7 | vii°7 G♯dim7'],
+        ['A', 'melodic-minor', 3, 'i Am | ii Bm | III+ Caug | IV D | V E | vi° F♯dim | vii° G♯dim'],
+        ['A', 'melodic-minor', 4, 'i(maj7) Am(maj7) | ii7 Bm7 | III+maj7 Cmaj7♯5 | IV7 D7 | V7 E7 | viø7 F♯m7♭5 | viiø7 G♯m7♭5'],
+        ['D', 'dorian', 3, 'i Dm | ii Em | III F | IV G | v Am | vi° Bdim | VII C'],
+        ['D', 'dorian', 4, 'i7 Dm7 | ii7 Em7 | IIImaj7 Fmaj7 | IV7 G7 | v7 Am7 | viø7 Bm7♭5 | VIImaj7 Cmaj7'],
+        ['E', 'phrygian', 3, 'i Em | II F | III G | iv Am | v° Bdim | VI C | vii Dm'],
+        ['C', 'lydian', 3, 'I C | II D | iii Em | iv° F♯dim | V G | vi Am | vii Bm'],
+        ['C', 'lydian', 4, 'Imaj7 Cmaj7 | II7 D7 | iii7 Em7 | ivø7 F♯m7♭5 | Vmaj7 Gmaj7 | vi7 Am7 | vii7 Bm7'],
+        ['G', 'mixolydian', 4, 'I7 G7 | ii7 Am7 | iiiø7 Bm7♭5 | IVmaj7 Cmaj7 | v7 Dm7 | vi7 Em7 | VIImaj7 Fmaj7'],
+        ['B', 'locrian', 3, 'i° Bdim | II C | iii Dm | iv Em | V F | VI G | vii Am'],
+        ['E', 'harmonic-minor', 4, 'i(maj7) Em(maj7) | iiø7 F♯m7♭5 | III+maj7 Gmaj7♯5 | iv7 Am7 | V7 B7 | VImaj7 Cmaj7 | vii°7 D♯dim7']
+      ];
+      BOOK.forEach(function (x) {
+        check(G, x[0] + ' ' + x[1] + (x[2] === 4 ? ' 七和弦' : ' 三和弦') + '：' + x[3], dia(x[0], x[1], x[2]), x[3]);
+      });
+      check(G, 'A 和声小调 V7 = E G♯ B D；vii°7 = G♯ B D F', [T.diatonicChords('A', 'harmonic-minor', 4)[4].notes.join(' '), T.diatonicChords('A', 'harmonic-minor', 4)[6].notes.join(' ')], ['E G♯ B D', 'G♯ B D F']);
+      check(G, '理论调：D♯ 和声小调 vii°7 = C𝄪dim7（C𝄪 E♯ G♯ B）', [T.diatonicChords('D♯', 'harmonic-minor', 4)[6].symbol, T.diatonicChords('D♯', 'harmonic-minor', 4)[6].notes.join(' ')], ['C𝄪dim7', 'C𝄪 E♯ G♯ B']);
+      check(G, '新音阶都是七声音阶，顺阶和弦按自己算', ['harmonic-minor', 'melodic-minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'locrian'].map(T.diatonicBase),
+        ['harmonic-minor', 'melodic-minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'locrian']);
+      var mt = function (r, sc, cr, c) { var m = T.diatonicMatch(r, sc, cr, c); return m ? m.size + ':' + m.item.roman : null; };
+      check(G, 'A 和声小调里 E7 是 V7（自然小调里不是）', [mt('A', 'harmonic-minor', 'E', '7'), mt('A', 'natural-minor', 'E', '7')], ['4:V7', null]);
+      check(G, 'D 多利亚里 G7 是 IV7', mt('D', 'dorian', 'G', '7'), '4:IV7');
+      var e7 = T.identifyChord(shape('020100'), { keyRoot: 'A', scaleId: 'harmonic-minor' }).candidates[0];
+      check(G, '识别：020100（E7）在 A 和声小调里 → E7，级数 V7', [e7.text, e7.roman], ['E7', 'V7']);
     });
 
     // ---------- 全面检查：每根弦每一品 ----------

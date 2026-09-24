@@ -1018,6 +1018,115 @@ const def = (scheme, key) => themeItems.find(i => i.key === key)[scheme];
     await context.close();
   }
 
+  // ---------- v0.5：更多音阶、特征音、关系说明 ----------
+  {
+    const { context, page, errors } = await openPage('index.html', { colorScheme: 'light', viewport: { width: 1400, height: 760 } });
+    await page.waitForSelector('#fretboard .pos');
+    const sel = await page.evaluate(() => ({
+      groups: [...document.querySelectorAll('#scale-select optgroup')].map(g => g.label + ':' + [...g.querySelectorAll('option')].map(o => o.value).join(',')),
+      first: document.querySelector('#scale-select option').value,
+      dorian: document.querySelector('#scale-select option[value="dorian"]').textContent
+    }));
+    check('音阶下拉框分三组：大调与小调 / 调式 / 五声与布鲁斯，共 12 种，第一项仍是“不显示”', JSON.stringify(sel.groups) === JSON.stringify([
+      '大调与小调:major,natural-minor,harmonic-minor,melodic-minor', '调式:dorian,phrygian,lydian,mixolydian,locrian',
+      '五声与布鲁斯:major-pentatonic,minor-pentatonic,blues']) && sel.first === 'none', sel);
+    check('调式在下拉框里附英文名：多利亚 Dorian', sel.dorian === '多利亚 Dorian', sel.dorian);
+    const OPEN = { 1: 4, 2: 11, 3: 7, 4: 2, 5: 9, 6: 4 };
+    const countPcs = set => { let n = 0; for (let s = 1; s <= 6; s++) for (let f = 0; f <= 15; f++) if (set.includes((OPEN[s] + f) % 12)) n++; return n; };
+    const rings = () => page.evaluate(() => [...document.querySelectorAll('.pos')].filter(g => g.querySelector('.char-ring')).map(g => ({
+      s: +g.dataset.string, f: +g.dataset.fret, pc: +g.dataset.pc, kind: g.querySelector('.dot').dataset.kind,
+      outside: g.querySelector('.dot').dataset.outside, stroke: getComputedStyle(g.querySelector('.char-ring')).stroke })));
+    const text = async s => (await page.locator(s).count()) ? (await page.textContent(s)).trim() : null;
+    const romans = () => page.evaluate(() => [...document.querySelectorAll('#dia-buttons .dia-roman')].map(x => x.textContent).join(' '));
+    const RGB = k => hexToRgb(def('light', k));
+
+    await page.selectOption('#chord-select', 'none');
+    await page.selectOption('#root-select', 'D');
+    await page.selectOption('#scale-select', 'dorian');
+    let r = await rings();
+    check('D 多利亚：特征音 B 全部加特殊描边（数量 = 0～15 品里所有 B），颜色来自 char-ring', r.length === countPcs([11]) && r.every(x => x.pc === 11 && x.stroke === RGB('char-ring')), [r.length, countPcs([11]), r[0]]);
+    check('D 多利亚：图例标题、关系说明、特征音说明', await text('#lg-title') === 'D 多利亚' && await text('#lg-rel') === 'D 多利亚 = C 大调从第 2 个音开始'
+      && await text('#lg-char') === '特征音 6（B）：比自然小调高半音', [await text('#lg-rel'), await text('#lg-char')]);
+    check('D 多利亚：图例音符里只有 B 带特征音圈，图例有“特征音”', await page.locator('#lg-scale .lg-note.character').count() === 1
+      && (await text('#lg-scale .lg-note.character b')) === 'B' && await page.locator('.lg-key.character').count() === 1);
+    check('D 多利亚：顺阶三和弦 i ii III IV v vi° VII，按 D 多利亚', await romans() === 'i ii III IV v vi° VII' && await text('#dia-basis') === '按 D 多利亚', await romans());
+    await page.screenshot({ path: path.join(outDir, 'v05_D_dorian_light.png') });
+    await page.click('#dia-size [data-size="4"]');
+    await page.click('#dia-buttons .dia-btn[data-step="1"]');
+    r = await rings();
+    check('D 多利亚 + Dm7：B 变成淡色圆点，仍有特征音描边', r.length === countPcs([11]) && r.every(x => x.kind === 'muted'), r[0]);
+    check('D 多利亚 + Dm7：图例和弦行 i7 · Dm7', await text('#lg-chord-title') === 'i7 · Dm7', await text('#lg-chord-title'));
+    await page.screenshot({ path: path.join(outDir, 'v05_D_dorian_Dm7_light.png') });
+    await page.keyboard.press('0');
+
+    await page.selectOption('#root-select', 'C');
+    await page.selectOption('#scale-select', 'lydian');
+    await page.click('#label-mode [data-label="degree"]');
+    r = await rings();
+    check('C 利底亚（音级）：F♯ 带特征音描边、显示 ♯4', r.length === countPcs([6]) && await page.evaluate(() =>
+      document.querySelector('.pos[data-string="1"][data-fret="2"] .dot text').textContent) === '♯4');
+    check('C 利底亚：关系 = G 大调第 4 个音；特征音 ♯4（F♯）比大调高半音', await text('#lg-rel') === 'C 利底亚 = G 大调从第 4 个音开始'
+      && await text('#lg-char') === '特征音 ♯4（F♯）：比大调高半音', [await text('#lg-rel'), await text('#lg-char')]);
+    await page.screenshot({ path: path.join(outDir, 'v05_C_lydian_degree_light.png') });
+    await page.click('#label-mode [data-label="name"]');
+
+    await page.selectOption('#root-select', 'A');
+    await page.selectOption('#scale-select', 'harmonic-minor');
+    check('A 和声小调：没有关系说明，特征音 7（G♯）', await text('#lg-rel') === null && await text('#lg-char') === '特征音 7（G♯）：比自然小调高半音', await text('#lg-info'));
+    check('A 和声小调：顺阶七和弦 i(maj7) iiø7 III+maj7 iv7 V7 VImaj7 vii°7', await romans() === 'i(maj7) iiø7 III+maj7 iv7 V7 VImaj7 vii°7', await romans());
+    await page.keyboard.press('5');
+    r = await rings();
+    check('A 和声小调按 5 → E7：G♯ 是和弦音（三音橙色），有特征音描边，不是调外音', await text('#lg-chord-title') === 'V7 · E7'
+      && r.length === countPcs([8]) && r.every(x => x.kind === 'chord' && x.outside === '0'), [await text('#lg-chord-title'), r[0]]);
+    await page.keyboard.press('0');
+    await page.selectOption('#scale-select', 'melodic-minor');
+    check('A 旋律小调：特征音 6、7（F♯、G♯）', await text('#lg-char') === '特征音 6、7（F♯、G♯）：比自然小调各高半音' && (await rings()).length === countPcs([6, 8]), await text('#lg-char'));
+    await page.selectOption('#scale-select', 'natural-minor');
+    check('A 自然小调：只有关系说明（C 大调第 6 个音），没有特征音', await text('#lg-rel') === 'A 自然小调 = C 大调从第 6 个音开始' && await text('#lg-char') === null
+      && (await rings()).length === 0 && await page.locator('.lg-key.character').count() === 0);
+    await page.selectOption('#scale-select', 'major');
+    check('大调：没有说明行，没有特征音描边', await page.locator('#lg-info').count() === 0 && (await rings()).length === 0);
+    await page.selectOption('#scale-select', 'blues');
+    check('布鲁斯：没有说明行', await page.locator('#lg-info').count() === 0);
+    await page.selectOption('#root-select', 'G♭');
+    await page.selectOption('#scale-select', 'locrian');
+    check('G♭ 洛克里亚：理论写法注明同音大调', await text('#lg-rel') === 'G♭ 洛克里亚 = A𝄫 大调（同音的 G 大调）从第 7 个音开始', await text('#lg-rel'));
+
+    // 识别和弦：级数跟着新音阶走
+    await page.selectOption('#root-select', 'A');
+    await page.selectOption('#scale-select', 'harmonic-minor');
+    await page.click('#identify-btn');
+    for (const [s, f] of [[6, 0], [5, 2], [4, 0], [3, 1], [2, 0], [1, 0]]) await page.click(`#fretboard .pos[data-string="${s}"][data-fret="${f}"]`);
+    check('识别：A 和声小调里 020100 → E7，在 A 和声小调里是 V7', (await text('#id-cands .id-cand.best .id-text')) === 'E7' && (await text('#id-info') || '').includes('在 A 和声小调里是 V7'), await text('#id-info'));
+    check('识别时指板上没有特征音描边', (await rings()).length === 0);
+    await page.keyboard.press('Escape');
+    await page.selectOption('#root-select', 'D');
+    await page.selectOption('#scale-select', 'phrygian');
+    await page.reload();
+    check('刷新后记住 D 弗里几亚', await page.inputValue('#scale-select') === 'phrygian' && await text('#lg-title') === 'D 弗里几亚');
+    await page.click('#color-btn');
+    check('调色面板有“特征音描边”', await page.locator('.cp-item[data-key="char-ring"]').count() === 1);
+    await page.click('#cp-close');
+    check('页面无报错（v0.5）', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    const { context, page, errors } = await openPage('index.html', { colorScheme: 'dark', viewport: { width: 1400, height: 760 } });
+    await page.selectOption('#root-select', 'A');
+    await page.selectOption('#scale-select', 'harmonic-minor');
+    await page.click('#dia-size [data-size="4"]');
+    await page.keyboard.press('5');
+    await page.screenshot({ path: path.join(outDir, 'v05_A_harmonic_E7_dark.png') });
+    await page.selectOption('#chord-select', 'none');
+    await page.selectOption('#root-select', 'G');
+    await page.selectOption('#scale-select', 'mixolydian');
+    await page.screenshot({ path: path.join(outDir, 'v05_G_mixolydian_dark.png') });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: path.join(outDir, 'v05_phone_dark.png'), fullPage: true });
+    check('页面无报错（v0.5 深色）', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
   // ---------- 自检页 ----------
   {
     const { context, page, errors } = await openPage('自检.html', { viewport: { width: 1000, height: 900 } });

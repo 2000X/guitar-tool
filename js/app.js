@@ -192,9 +192,11 @@
       var cls = 'dot kind-' + info.kind + ' role-' + info.role + (text.length > 2 ? ' small' : '');
       var dot = el('g', { class: cls, 'data-kind': info.kind, 'data-name': info.name, 'data-degree': info.degree,
         'data-interval': info.interval, 'data-role': info.role,
-        'data-outside': info.outside ? '1' : '0', 'data-scale-root': info.scaleRoot && hasChord ? '1' : '0' }, g);
+        'data-outside': info.outside ? '1' : '0', 'data-scale-root': info.scaleRoot && hasChord ? '1' : '0',
+        'data-character': info.character ? '1' : '0' }, g);
       if (info.scaleRoot && hasChord) el('circle', { class: 'ring scale-root-ring', r: 19 }, dot);
       if (info.outside) el('circle', { class: 'ring outside-ring', r: 19 }, dot);
+      if (info.character) el('circle', { class: 'ring char-ring', r: 19 }, dot); // 特征音（v0.5）
       el('circle', { class: 'body', r: info.kind === 'muted' ? 13 : 15 }, dot);
       el('text', { 'text-anchor': 'middle', 'dominant-baseline': 'central', y: 0.5 }, dot).textContent = text;
     });
@@ -227,9 +229,11 @@
       var sc = T.getScale(state.scale);
       html += '<div class="lg-notes" id="lg-scale"><span class="lg-title" id="lg-title">' + state.root + ' ' + sc.name + '</span>';
       T.scaleNotes(state.root, state.scale).forEach(function (n) {
-        html += chip(n, hasChord ? 'kind-muted' + (n.degree === '1' ? ' scale-root' : '') : 'role-' + n.role);
+        html += chip(n, (hasChord ? 'kind-muted' + (n.degree === '1' ? ' scale-root' : '') : 'role-' + n.role) + (n.character ? ' character' : ''));
       });
       html += '</div>';
+      var info = scaleInfoText(state.root, state.scale);
+      if (info) html += '<div class="lg-info" id="lg-info">' + info + '</div>';
     }
     html += '</div><div class="lg-keys">';
     // 和弦里没有“其他”；“延伸音”只在当前和弦有延伸音时列出
@@ -239,12 +243,42 @@
       if (r === 'ext' && !hasExt) return;
       html += '<span class="lg-key role-' + r + '"><i></i>' + ROLE_NAMES[r] + '</span>';
     });
+    if (hasScale && T.scaleInfo(state.root, state.scale).character.length) html += '<span class="lg-key character"><i></i>特征音</span>';
     if (hasChord && hasScale) {
       html += '<span class="lg-key kind-muted"><i></i>其他音阶音</span>'
         + '<span class="lg-key scale-root"><i></i>音阶根音</span>'
         + '<span class="lg-key outside"><i></i>调外音</span>';
     }
     box.innerHTML = html + '</div>';
+  }
+
+  // 音阶说明（v0.5）：调式和大调的关系 + 特征音。例如
+  //   “D 多利亚 = C 大调从第 2 个音开始 · 特征音 6（B）：比自然小调高半音”
+  function scaleInfoText(root, scaleId) {
+    var sc = T.getScale(scaleId), info = T.scaleInfo(root, scaleId), parts = [];
+    if (info.relation) {
+      var r = info.relation;
+      parts.push('<span id="lg-rel">' + root + ' ' + sc.name + ' = ' + r.root + ' 大调'
+        + (r.simple !== r.root ? '（同音的 ' + r.simple + ' 大调）' : '') + '从第 ' + r.step + ' 个音开始</span>');
+    }
+    if (info.character.length) {
+      var ch = info.character, up = ch[0].diff > 0;
+      parts.push('<span id="lg-char">特征音 ' + ch.map(function (c) { return c.degree; }).join('、')
+        + '（' + ch.map(function (c) { return c.name; }).join('、') + '）：比' + T.getScale(info.compare).name
+        + (ch.length > 1 ? '各' : '') + (up ? '高' : '低') + '半音</span>');
+    }
+    return parts.join('<span class="lg-sep"> · </span>');
+  }
+
+  // 音阶类型下拉框：按分组（大调与小调、调式、五声与布鲁斯）列出（v0.5）
+  function fillScaleSelect(sel) {
+    T.SCALE_GROUPS.forEach(function (g) {
+      var og = document.createElement('optgroup'); og.label = g.name;
+      T.SCALES.filter(function (s) { return s.group === g.id; }).forEach(function (s) {
+        var op = document.createElement('option'); op.value = s.id; op.textContent = s.label || s.name; og.appendChild(op);
+      });
+      sel.appendChild(og);
+    });
   }
 
   function fillSelect(sel, items, withNone) {
@@ -525,7 +559,9 @@
       });
     };
     bind('root-select', 'root', roots, false);
-    bind('scale-select', 'scale', T.SCALES.map(function (x) { return [x.id, x.name]; }), true);
+    bind('scale-select', 'scale', [], true);
+    fillScaleSelect(document.getElementById('scale-select'));
+    document.getElementById('scale-select').value = state.scale;
     bind('chord-root-select', 'chordRoot', roots, false);
     bind('chord-select', 'chord', [], true);
     fillChordSelect();
