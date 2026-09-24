@@ -13,3 +13,4 @@
 | `README.md` | 项目说明（本文件） |
 | `CHANGELOG.md` | 每个版本改了什么 |
 | `.gitignore` | 告诉 Git 忽略哪些无关文件 |
+| `docs/需求文档.md` | 要做什么、乐理规则、验收标准 |
