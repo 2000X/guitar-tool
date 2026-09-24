@@ -4,21 +4,30 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>吉他指板</title>
+  <script src="js/theme.js"></script>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div class="page">
     <header>
-      <h1>吉他指板</h1>
-      <p class="sub">v0.1 开发中 · 第 1 步：指板</p>
+      <div>
+        <h1>吉他指板</h1>
+        <p class="sub">v0.1 开发中 · 第 1 步：指板</p>
+      </div>
+      <div class="toolbar">
+        <div id="mode-switch"></div>
+        <button type="button" class="btn" id="color-btn" aria-expanded="false" aria-controls="color-panel">调色</button>
+      </div>
     </header>
     <main>
       <div class="board-wrap">
         <svg id="fretboard" role="img" aria-label="吉他指板，标准调弦，0 到 15 品"></svg>
       </div>
+      <section id="color-panel" class="color-panel" hidden aria-label="调色面板"></section>
     </main>
   </div>
   <script src="js/theory.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/theme-ui.js"></script>
 </body>
 </html>

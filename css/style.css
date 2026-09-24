@@ -1,41 +1,8 @@
-/* 颜色都集中定义在这里，浅色/深色模式各一套 */
-:root {
-  color-scheme: light dark;
-  --bg: #f6f5f2;
-  --panel: #ffffff;
-  --text: #1f2328;
-  --muted: #6b6f76;
-  --line: #e2dfd8;
-  --board: #ede6d9;
-  --board-edge: #d8cfbf;
-  --fret: #a39c92;
-  --nut: #4a4540;
-  --string: #7b746b;
-  --inlay: #d3c8b5;
-  --hover: rgba(0, 0, 0, 0.07);
-  --pass: #1a7f37;
-  --fail: #cf222e;
-  --todo: #8c959f;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #15171a;
-    --panel: #1d2024;
-    --text: #e7e7e7;
-    --muted: #9aa0a8;
-    --line: #2d3137;
-    --board: #22252a;
-    --board-edge: #30343a;
-    --fret: #4f555e;
-    --nut: #cfd3d8;
-    --string: #8d949d;
-    --inlay: #353a42;
-    --hover: rgba(255, 255, 255, 0.09);
-    --pass: #4ac26b;
-    --fail: #ff7b72;
-    --todo: #6e7681;
-  }
-}
+/*
+ * 外观：排版、尺寸、线条。
+ * 注意：这里不写任何具体颜色，只用 var(--名字)。所有颜色都在 js/theme.js 里定义，
+ * 这样调色面板才能调到每一种颜色。（自动检查会核对这一点）
+ */
 
 * { box-sizing: border-box; }
 body {
@@ -46,9 +13,26 @@ body {
   line-height: 1.5;
 }
 .page { max-width: 1320px; margin: 0 auto; padding: 28px 16px 40px; }
-header h1 { font-size: 22px; margin: 0 0 2px; font-weight: 650; letter-spacing: 0.02em; }
-header .sub { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
 
+/* 页头：左边标题，右边工具按钮 */
+header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+header h1 { font-size: 22px; margin: 0 0 2px; font-weight: 650; letter-spacing: 0.02em; }
+header .sub { margin: 0; color: var(--muted); font-size: 13px; }
+.toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* 按钮 */
+.btn, .segmented button {
+  font: inherit; font-size: 13px; color: var(--text); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.btn:hover, .segmented button:hover { border-color: var(--muted); }
+.btn[aria-expanded="true"] { background: var(--text); color: var(--panel); border-color: var(--text); }
+.segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
+.segmented button { border: 0; border-radius: 0; border-right: 1px solid var(--line); }
+.segmented button:last-child { border-right: 0; }
+.segmented button[aria-checked="true"] { background: var(--text); color: var(--panel); }
+
+/* 指板外框 */
 .board-wrap {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -68,6 +52,38 @@ header .sub { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
 .string-label { font-weight: 600; }
 .fret-num.marked { fill: var(--text); font-weight: 600; }
 
-/* 每个位置的占位点：现在是透明的，鼠标移上去会淡淡亮起 */
+/* 每个位置的占位点：平时透明，鼠标移上去淡淡亮起 */
 .pos .hit { fill: transparent; transition: fill 0.12s; }
-.pos:hover .hit { fill: var(--hover); }
+.pos:hover .hit { fill: var(--hover); fill-opacity: 0.09; }
+
+/* 调色面板 */
+.color-panel {
+  margin-top: 16px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; padding: 14px 18px 16px;
+}
+.color-panel[hidden] { display: none; }
+.cp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cp-title { font-weight: 650; font-size: 15px; }
+.cp-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.cp-note { color: var(--muted); font-size: 12.5px; margin: 6px 0 4px; }
+.cp-group h3 { font-size: 13px; color: var(--muted); font-weight: 600; margin: 14px 0 6px; }
+.cp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 6px 14px; }
+.cp-item { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 8px; font-size: 13px; }
+.cp-item:hover { background: var(--bg); }
+.cp-item input[type="color"] {
+  width: 30px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel); cursor: pointer; flex: none;
+}
+.cp-label { flex: 1; min-width: 0; }
+.cp-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text); flex: none; }
+.cp-dot[hidden] { display: none; }
+.cp-hex {
+  width: 78px; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px;
+}
+.cp-foot { margin-top: 10px; font-size: 12.5px; color: var(--muted); min-height: 1em; }
+.cp-export {
+  width: 100%; margin-top: 6px; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px;
+}
+.cp-export[hidden] { display: none; }

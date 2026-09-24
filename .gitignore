@@ -8,3 +8,6 @@
 *.swp
 *.tmp
 *~
+
+# 聊天里发送的截图（Claude 桌面 App 自动保存），仅供参考，不纳入版本
+Claude outputs/
