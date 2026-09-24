@@ -52,9 +52,11 @@ header .sub { margin: 0; color: var(--muted); font-size: 13px; }
 .string-label { font-weight: 600; }
 .fret-num.marked { fill: var(--text); font-weight: 600; }
 
-/* 每个位置的占位点：平时透明，鼠标移上去淡淡亮起 */
-.pos .hit { fill: transparent; transition: fill 0.12s; }
-.pos:hover .hit { fill: var(--hover); fill-opacity: 0.09; }
+/* 每个位置的占位点：平时透明，鼠标移上去淡淡亮起。
+   颜色始终不变，只让透明度在 0 和 0.09 之间渐变——
+   （之前是颜色渐变、透明度瞬间跳回 1，移开时会闪一下不透明的圆） */
+.pos .hit { fill: var(--hover); fill-opacity: 0; transition: fill-opacity 0.12s; }
+.pos:hover .hit { fill-opacity: 0.09; }
 
 /* 调色面板 */
 .color-panel {

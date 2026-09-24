@@ -150,6 +150,31 @@ const def = (scheme, key) => themeItems.find(i => i.key === key)[scheme];
     await context.close();
   }
 
+  // ---------- 悬停高亮：移开时不能闪一下（v0.1 后修复的 bug） ----------
+  for (const scheme of ['light', 'dark']) {
+    const { context, page } = await openPage('index.html', { colorScheme: scheme });
+    await page.selectOption('#scale-select', 'none'); // 空位置更容易看清
+    const box = await page.locator('.pos[data-string="3"][data-fret="4"] .hit').boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForTimeout(300);
+    const hoverOp = await page.$eval('.pos[data-string="3"][data-fret="4"] .hit', el => +getComputedStyle(el).fillOpacity);
+    await page.mouse.move(5, 5); // 移开
+    // 移开后 0.15 秒内连续取样，透明度都不能超过悬停时的淡色
+    const samples = await page.$eval('.pos[data-string="3"][data-fret="4"] .hit', el => new Promise(res => {
+      const out = []; const t0 = performance.now();
+      (function tick() {
+        const cs = getComputedStyle(el);
+        const visible = cs.fill !== 'none' && !/rgba\(0, 0, 0, 0\)|transparent/.test(cs.fill);
+        out.push(visible ? +cs.fillOpacity : 0);
+        if (performance.now() - t0 < 150) requestAnimationFrame(tick); else res(out);
+      })();
+    }));
+    const tag = scheme === 'light' ? '浅色' : '深色';
+    check(`悬停时显示淡色圆（${tag}）`, hoverOp > 0 && hoverOp <= 0.12, hoverOp);
+    check(`光标移开时不会闪出不透明的圆（${tag}）`, Math.max(...samples) <= 0.12, 'max=' + Math.max(...samples));
+    await context.close();
+  }
+
   // ---------- 第 2 步：音阶圆点 ----------
   {
     const { context, page, errors } = await openPage('index.html', { colorScheme: 'light', viewport: { width: 1400, height: 760 } });
