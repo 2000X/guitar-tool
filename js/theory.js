@@ -65,12 +65,13 @@
   // ---------------- 音级、拼写、音程 ----------------
 
   // 大调里各级相对根音的半音数：1 级 0，2 级 2，3 级 4……（音级的“基准”）
-  var MAJOR_SEMITONES = { 1: 0, 2: 2, 3: 4, 4: 5, 5: 7, 6: 9, 7: 11 };
+  // 9、11、13 是高八度的 2、4、6（延伸音），在和弦里按和弦习惯写成 9、11、13
+  var MAJOR_SEMITONES = { 1: 0, 2: 2, 3: 4, 4: 5, 5: 7, 6: 9, 7: 11, 9: 14, 11: 17, 13: 21 };
   var ALTER_SYMBOL = { '-2': '𝄫', '-1': '♭', '0': '', '1': '♯', '2': '𝄪' };
 
-  // 解析音级写法：'1'、'♭3'、'♯5'、'𝄫7'（也接受 b3、#5、bb7）
+  // 解析音级写法：'1'、'♭3'、'♯5'、'𝄫7'、'9'、'♯9'、'11'、'13'（也接受 b3、#5、bb7）
   function parseDegree(text) {
-    var m = /^(𝄫|♭♭|bb|♭|b|♯|#|𝄪|##|x)?([1-7])$/.exec(String(text).trim());
+    var m = /^(𝄫|♭♭|bb|♭|b|♯|#|𝄪|##|x)?(1[13]|[1-79])$/.exec(String(text).trim());
     if (!m) throw new Error('无法识别的音级：' + text);
     var acc = m[1] || '';
     var alter = { '': 0, '♭': -1, 'b': -1, '𝄫': -2, '♭♭': -2, 'bb': -2, '♯': 1, '#': 1, '𝄪': 2, '##': 2, 'x': 2 }[acc];
@@ -87,11 +88,11 @@
     return { letter: letter, alter: alter, pc: pc, name: letter + ALTER_SYMBOL[alter] };
   }
 
-  // 音程名：1 级显示 R（根音），其余如 m3、M3、P5、d5、A5
+  // 音程名：1 级显示 R（根音），其余如 m3、M3、P5、d5、A5；延伸音如 M9、A9、P11、M13
   function intervalName(degreeText) {
     var d = parseDegree(degreeText);
     if (d.number === 1 && d.alter === 0) return 'R';
-    var perfect = d.number === 1 || d.number === 4 || d.number === 5;
+    var perfect = d.number === 1 || d.number === 4 || d.number === 5 || d.number === 11;
     var q = perfect
       ? { '-2': 'dd', '-1': 'd', '0': 'P', '1': 'A', '2': 'AA' }[d.alter]
       : { '-2': 'd', '-1': 'm', '0': 'M', '1': 'A', '2': 'AA' }[d.alter];
@@ -99,9 +100,10 @@
   }
 
   // 音级在和弦骨架里的角色，决定颜色：根音 / 三音 / 五音 / 七音 / 其他
-  function roleOf(degreeText) {
+  // inChord 为真时（和弦里），2、4、6、9、11、13 算“延伸音”（ext，单独一种颜色）；音阶里仍算“其他”
+  function roleOf(degreeText, inChord) {
     var n = parseDegree(degreeText).number;
-    return { 1: 'root', 3: 'third', 5: 'fifth', 7: 'seventh' }[n] || 'other';
+    return { 1: 'root', 3: 'third', 5: 'fifth', 7: 'seventh' }[n] || (inChord ? 'ext' : 'other');
   }
 
   // ---------------- 音阶 ----------------
@@ -144,16 +146,46 @@
   }
 
   // ---------------- 和弦 ----------------
+  // group：下拉框里的分组。degrees 按从低到高的“理论顺序”写（识别和弦、顺阶和弦都靠它比对）
+  // 注意：id '7'、'9'、'11'、'13'、'5' 像数字，Object.keys 会把它们排到最前，遍历请直接用这个数组
+  var CHORD_GROUPS = [
+    { id: 'triad',  name: '三和弦' },
+    { id: 'sus',    name: '挂留 / 强力和弦' },
+    { id: 'sixth',  name: '六和弦' },
+    { id: 'seventh', name: '七和弦' },
+    { id: 'ext',    name: '九和弦及以上' }
+  ];
   var CHORDS = [
-    { id: 'maj',   name: '大三',   symbol: '',     degrees: ['1', '3', '5'] },
-    { id: 'm',     name: '小三',   symbol: 'm',    degrees: ['1', '♭3', '5'] },
-    { id: 'dim',   name: '减三',   symbol: 'dim',  degrees: ['1', '♭3', '♭5'] },
-    { id: 'aug',   name: '增三',   symbol: 'aug',  degrees: ['1', '3', '♯5'] },
-    { id: 'maj7',  name: '大七',   symbol: 'maj7', degrees: ['1', '3', '5', '7'] },
-    { id: 'm7',    name: '小七',   symbol: 'm7',   degrees: ['1', '♭3', '5', '♭7'] },
-    { id: '7',     name: '属七',   symbol: '7',    degrees: ['1', '3', '5', '♭7'] },
-    { id: 'm7b5',  name: '半减七', symbol: 'm7♭5', degrees: ['1', '♭3', '♭5', '♭7'] },
-    { id: 'dim7',  name: '减七',   symbol: 'dim7', degrees: ['1', '♭3', '♭5', '𝄫7'] }
+    { id: 'maj',    name: '大三',     symbol: '',        group: 'triad',   degrees: ['1', '3', '5'] },
+    { id: 'm',      name: '小三',     symbol: 'm',       group: 'triad',   degrees: ['1', '♭3', '5'] },
+    { id: 'dim',    name: '减三',     symbol: 'dim',     group: 'triad',   degrees: ['1', '♭3', '♭5'] },
+    { id: 'aug',    name: '增三',     symbol: 'aug',     group: 'triad',   degrees: ['1', '3', '♯5'] },
+    { id: 'maj7',   name: '大七',     symbol: 'maj7',    group: 'seventh', degrees: ['1', '3', '5', '7'] },
+    { id: 'm7',     name: '小七',     symbol: 'm7',      group: 'seventh', degrees: ['1', '♭3', '5', '♭7'] },
+    { id: '7',      name: '属七',     symbol: '7',       group: 'seventh', degrees: ['1', '3', '5', '♭7'] },
+    { id: 'm7b5',   name: '半减七',   symbol: 'm7♭5',    group: 'seventh', degrees: ['1', '♭3', '♭5', '♭7'] },
+    { id: 'dim7',   name: '减七',     symbol: 'dim7',    group: 'seventh', degrees: ['1', '♭3', '♭5', '𝄫7'] },
+    // ---- v0.4 新增 ----
+    { id: 'sus2',   name: '挂二',     symbol: 'sus2',    group: 'sus',     degrees: ['1', '2', '5'] },
+    { id: 'sus4',   name: '挂四',     symbol: 'sus4',    group: 'sus',     degrees: ['1', '4', '5'] },
+    { id: '7sus4',  name: '属七挂四', symbol: '7sus4',   group: 'sus',     degrees: ['1', '4', '5', '♭7'] },
+    { id: '5',      name: '强力和弦', symbol: '5',       group: 'sus',     degrees: ['1', '5'] },
+    { id: '6',      name: '大六',     symbol: '6',       group: 'sixth',   degrees: ['1', '3', '5', '6'] },
+    { id: 'm6',     name: '小六',     symbol: 'm6',      group: 'sixth',   degrees: ['1', '♭3', '5', '6'] },
+    { id: 'mMaj7',  name: '小大七',   symbol: 'm(maj7)', group: 'seventh', degrees: ['1', '♭3', '5', '7'] },
+    { id: 'maj7s5', name: '增大七',   symbol: 'maj7♯5',  group: 'seventh', degrees: ['1', '3', '♯5', '7'] },
+    { id: '7s5',    name: '增七',     symbol: '7♯5',     group: 'seventh', degrees: ['1', '3', '♯5', '♭7'] },
+    { id: 'add9',   name: '加九',     symbol: 'add9',    group: 'ext',     degrees: ['1', '3', '5', '9'] },
+    { id: 'madd9',  name: '小加九',   symbol: 'madd9',   group: 'ext',     degrees: ['1', '♭3', '5', '9'] },
+    { id: '6/9',    name: '六九',     symbol: '6/9',     group: 'ext',     degrees: ['1', '3', '5', '6', '9'] },
+    { id: '9',      name: '属九',     symbol: '9',       group: 'ext',     degrees: ['1', '3', '5', '♭7', '9'] },
+    { id: 'm9',     name: '小九',     symbol: 'm9',      group: 'ext',     degrees: ['1', '♭3', '5', '♭7', '9'] },
+    { id: 'maj9',   name: '大九',     symbol: 'maj9',    group: 'ext',     degrees: ['1', '3', '5', '7', '9'] },
+    { id: '7b9',    name: '属七降九', symbol: '7♭9',     group: 'ext',     degrees: ['1', '3', '5', '♭7', '♭9'] },
+    { id: '7s9',    name: '属七升九', symbol: '7♯9',     group: 'ext',     degrees: ['1', '3', '5', '♭7', '♯9'] },
+    // 十一、十三和弦：11 写全六个音；13 按吉他上的通行写法省略 11 音（11 和 3 音相差小九度，很刺耳）
+    { id: '11',     name: '属十一',   symbol: '11',      group: 'ext',     degrees: ['1', '3', '5', '♭7', '9', '11'] },
+    { id: '13',     name: '属十三',   symbol: '13',      group: 'ext',     degrees: ['1', '3', '5', '♭7', '9', '13'] }
   ];
 
   function getChord(id) {
@@ -170,7 +202,7 @@
   function chordNotes(rootName, chordId) {
     return getChord(chordId).degrees.map(function (deg) {
       var n = spellDegree(rootName, deg);
-      return { degree: parseDegree(deg).text, name: n.name, pc: n.pc, interval: intervalName(deg), role: roleOf(deg) };
+      return { degree: parseDegree(deg).text, name: n.name, pc: n.pc, interval: intervalName(deg), role: roleOf(deg, true) };
     });
   }
 
@@ -190,7 +222,9 @@
   // 和弦类型不是写死的，而是由叠出来的音算出来的——以后加和声小调等音阶，可以自动得到它的顺阶和弦。
   var ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
   // 罗马数字：大写 = 三音是大三度，小写 = 小三度；后缀表示和弦类型（小写 + 7 就是小七和弦，如 ii7）
-  var ROMAN_SUFFIX = { maj: '', m: '', dim: '°', aug: '+', maj7: 'maj7', m7: '7', '7': '7', m7b5: 'ø7', dim7: '°7' };
+  // mMaj7、maj7s5 是给 v0.5 和声小调 / 旋律小调预备的：i(maj7)、III+maj7
+  var ROMAN_SUFFIX = { maj: '', m: '', dim: '°', aug: '+', maj7: 'maj7', m7: '7', '7': '7', m7b5: 'ø7', dim7: '°7',
+    mMaj7: '(maj7)', maj7s5: '+maj7' };
 
   // 算顺阶和弦用哪个七声音阶；没选音阶或无法计算时返回 null
   function diatonicBase(scaleId) {
@@ -301,6 +335,7 @@
     scaleNotes: scaleNotes,
     findByPc: findByPc,
     CHORDS: CHORDS,
+    CHORD_GROUPS: CHORD_GROUPS,
     getChord: getChord,
     chordSymbol: chordSymbol,
     chordNotes: chordNotes,

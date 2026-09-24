@@ -36,6 +36,7 @@
       { key: 'deg-fifth',    label: '五音',               light: '#2f6fdb', dark: '#4c8dff' },
       { key: 'deg-seventh',  label: '七音',               light: '#8250df', dark: '#a371f7' },
       { key: 'deg-other',    label: '其他音阶音',         light: '#8b929a', dark: '#5c636c' },
+      { key: 'deg-ext',      label: '延伸音（和弦里的 6、9、11、13 和 sus 的 2、4）', light: '#1f9d6b', dark: '#35b983' },
       { key: 'dot-text',     label: '彩色圆点上的文字',   light: '#ffffff', dark: '#ffffff' },
       { key: 'dot-outline',  label: '圆点描边（与指板分隔）', light: '#ffffff', dark: '#1d2024' }
     ]},

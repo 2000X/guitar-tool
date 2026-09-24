@@ -52,6 +52,9 @@
       check(G, '#6 A 布鲁斯 = A C D E♭ E G', names('A', 'blues'), ['A', 'C', 'D', 'E♭', 'E', 'G']);
     });
     var chord = function (root, id) { return T.chordNotes(root, id).map(function (n) { return n.name; }).join(' '); };
+    var dia = function (root, sc, size) {
+      return T.diatonicChords(root, sc, size).map(function (x) { return x.roman + ' ' + x.symbol; }).join(' | ');
+    };
     safe(G, '#7 各和弦组成音', function () {
       check(G, '#7a G = G B D', chord('G', 'maj'), 'G B D');
       check(G, '#7b Cmaj7 = C E G B', chord('C', 'maj7'), 'C E G B');
@@ -115,13 +118,17 @@
     G = '音级拼写与音程名';
     safe(G, '拼写', function () {
       [['C', '𝄫7', 'B𝄫'], ['B♭', '♭5', 'F♭'], ['E', '♯5', 'B♯'], ['D♯', '3', 'F𝄪'], ['G♭', '4', 'C♭'],
-       ['A', '♭3', 'C'], ['F', '7', 'E'], ['C♯', '7', 'B♯'], ['A♭', '♭7', 'G♭']].forEach(function (x) {
+       ['A', '♭3', 'C'], ['F', '7', 'E'], ['C♯', '7', 'B♯'], ['A♭', '♭7', 'G♭'],
+       ['C', '9', 'D'], ['F', '♭9', 'G♭'], ['E', '♯9', 'F𝄪'], ['B♭', '11', 'E♭'], ['A', '13', 'F♯'], ['G', '♯11', 'C♯']].forEach(function (x) {
         check(G, x[0] + ' 的 ' + x[1] + ' 级 = ' + x[2], T.spellDegree(x[0], x[1]).name, x[2]);
       });
       [['1', 'R'], ['2', 'M2'], ['♭3', 'm3'], ['3', 'M3'], ['4', 'P4'], ['♭5', 'd5'], ['5', 'P5'], ['♯5', 'A5'],
-       ['♭6', 'm6'], ['6', 'M6'], ['𝄫7', 'd7'], ['♭7', 'm7'], ['7', 'M7']].forEach(function (x) {
+       ['♭6', 'm6'], ['6', 'M6'], ['𝄫7', 'd7'], ['♭7', 'm7'], ['7', 'M7'],
+       ['♭9', 'm9'], ['9', 'M9'], ['♯9', 'A9'], ['11', 'P11'], ['♯11', 'A11'], ['♭13', 'm13'], ['13', 'M13']].forEach(function (x) {
         check(G, x[0] + ' 级的音程名 = ' + x[1], T.intervalName(x[0]), x[1]);
       });
+      var bad = ['8', '10', '12', '14', '0', '♯'].filter(function (t) { try { T.parseDegree(t); return true; } catch (e) { return false; } });
+      check(G, '不存在的音级（8、10、12、14、0）会报错', bad, []);
     });
 
     // ---------- 常见调的音阶（对照乐理书） ----------
@@ -208,36 +215,113 @@
       check(G, 'C 大调 + C：C 既是和弦根音也有描边', m3[0].kind + (m3[0].scaleRoot ? ':描边' : ''), 'chord:描边');
     });
 
-    G = '全面检查：17 个根音 × 9 种和弦';
+    G = '全面检查：17 个根音 × 28 种和弦';
     safe(G, '全部组合', function () {
-      var SEMI = { 'maj': [0, 4, 7], 'm': [0, 3, 7], 'dim': [0, 3, 6], 'aug': [0, 4, 8], 'maj7': [0, 4, 7, 11],
-        'm7': [0, 3, 7, 10], '7': [0, 4, 7, 10], 'm7b5': [0, 3, 6, 10], 'dim7': [0, 3, 6, 9] };
+      // 独立写的标准：每种和弦各音相对根音的半音数（除以 12 取余）和字母相隔几个
+      // 注意：不能用 Object.keys 决定顺序，数字名“7”“9”等会被排到最前，所以另写 ORDER
+      var DEF = {
+        'maj':    [[0, 4, 7], [0, 2, 4]],            'm':      [[0, 3, 7], [0, 2, 4]],
+        'dim':    [[0, 3, 6], [0, 2, 4]],            'aug':    [[0, 4, 8], [0, 2, 4]],
+        'maj7':   [[0, 4, 7, 11], [0, 2, 4, 6]],     'm7':     [[0, 3, 7, 10], [0, 2, 4, 6]],
+        '7':      [[0, 4, 7, 10], [0, 2, 4, 6]],     'm7b5':   [[0, 3, 6, 10], [0, 2, 4, 6]],
+        'dim7':   [[0, 3, 6, 9], [0, 2, 4, 6]],
+        'sus2':   [[0, 2, 7], [0, 1, 4]],            'sus4':   [[0, 5, 7], [0, 3, 4]],
+        '7sus4':  [[0, 5, 7, 10], [0, 3, 4, 6]],     '5':      [[0, 7], [0, 4]],
+        '6':      [[0, 4, 7, 9], [0, 2, 4, 5]],      'm6':     [[0, 3, 7, 9], [0, 2, 4, 5]],
+        'mMaj7':  [[0, 3, 7, 11], [0, 2, 4, 6]],     'maj7s5': [[0, 4, 8, 11], [0, 2, 4, 6]],
+        '7s5':    [[0, 4, 8, 10], [0, 2, 4, 6]],
+        'add9':   [[0, 4, 7, 2], [0, 2, 4, 1]],      'madd9':  [[0, 3, 7, 2], [0, 2, 4, 1]],
+        '6/9':    [[0, 4, 7, 9, 2], [0, 2, 4, 5, 1]],
+        '9':      [[0, 4, 7, 10, 2], [0, 2, 4, 6, 1]], 'm9':   [[0, 3, 7, 10, 2], [0, 2, 4, 6, 1]],
+        'maj9':   [[0, 4, 7, 11, 2], [0, 2, 4, 6, 1]], '7b9':  [[0, 4, 7, 10, 1], [0, 2, 4, 6, 1]],
+        '7s9':    [[0, 4, 7, 10, 3], [0, 2, 4, 6, 1]],
+        '11':     [[0, 4, 7, 10, 2, 5], [0, 2, 4, 6, 1, 3]],
+        '13':     [[0, 4, 7, 10, 2, 9], [0, 2, 4, 6, 1, 5]]
+      };
+      var ORDER = ['maj', 'm', 'dim', 'aug', 'maj7', 'm7', '7', 'm7b5', 'dim7',
+        'sus2', 'sus4', '7sus4', '5', '6', 'm6', 'mMaj7', 'maj7s5', '7s5',
+        'add9', 'madd9', '6/9', '9', 'm9', 'maj9', '7b9', '7s9', '11', '13'];
       var LET = 'CDEFGAB', PCS = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
       var ACC = { '': 0, '♭': -1, '𝄫': -2, '♯': 1, '𝄪': 2 };
       var ROOTS17 = ['C', 'C♯', 'D♭', 'D', 'D♯', 'E♭', 'E', 'F', 'F♯', 'G♭', 'G', 'G♯', 'A♭', 'A', 'A♯', 'B♭', 'B'];
-      var ORDER = ['maj', 'm', 'dim', 'aug', 'maj7', 'm7', '7', 'm7b5', 'dim7']; // 注意：不能用 Object.keys，数字名“7”会被排到最前
-      check(G, '和弦正好是这 9 种', T.CHORDS.map(function (x) { return x.id; }), ORDER);
+      check(G, '和弦正好是这 28 种（原 9 种 + v0.4 新增 19 种）', T.CHORDS.map(function (x) { return x.id; }), ORDER);
       var bad = [], count = 0;
       ROOTS17.forEach(function (root) {
         var rl = root[0], rpc = (PCS[rl] + ACC[root.slice(1)] + 12) % 12;
         ORDER.forEach(function (id) {
-          T.chordNotes(root, id).forEach(function (n, i) {
+          var ns = T.chordNotes(root, id);
+          if (ns.length !== DEF[id][0].length) bad.push(root + id + ' 音数不对');
+          ns.forEach(function (n, i) {
             count++;
             var letter = n.name[0], acc = n.name.slice(1);
-            var okPc = (acc in ACC) && (PCS[letter] + ACC[acc] + 24) % 12 === (rpc + SEMI[id][i]) % 12;
-            var okLetter = letter === LET[(LET.indexOf(rl) + 2 * i) % 7]; // 三度叠置：字母隔一个
+            var okPc = (acc in ACC) && (PCS[letter] + ACC[acc] + 24) % 12 === (rpc + DEF[id][0][i]) % 12;
+            var okLetter = letter === LET[(LET.indexOf(rl) + DEF[id][1][i]) % 7];
             if (!okPc || !okLetter) bad.push(root + id + ' 第' + (i + 1) + '音 ' + n.name);
           });
         });
       });
-      check(G, '全部 ' + count + ' 个和弦音的音高和字母都正确（按三度叠置）', bad, []);
+      check(G, '全部 ' + count + ' 个和弦音的音高和字母都正确', bad, []);
+      var syms = T.CHORDS.map(function (x) { return x.symbol; });
+      check(G, '和弦写法互不重复', syms.filter(function (x, i) { return syms.indexOf(x) !== i; }), []);
+      var sets = T.CHORDS.map(function (x) { return x.degrees.join(','); });
+      check(G, '音级组成互不重复（chordByDegrees 不会找错）', sets.filter(function (x, i) { return sets.indexOf(x) !== i; }), []);
+    });
+
+    // ---------- v0.4 新增和弦：标准答案（独立写死） ----------
+    G = 'v0.4 新增和弦（标准答案）';
+    var detail = function (root, id) {
+      return T.chordNotes(root, id).map(function (n) { return n.name + '/' + n.degree + '/' + n.interval + '/' + n.role; }).join(' ');
+    };
+    safe(G, '新和弦', function () {
+      var BOOK = [
+        ['C', 'sus2', 'Csus2', 'C D G'], ['C', 'sus4', 'Csus4', 'C F G'], ['C', '7sus4', 'C7sus4', 'C F G B♭'],
+        ['C', '5', 'C5', 'C G'], ['C', '6', 'C6', 'C E G A'], ['C', 'm6', 'Cm6', 'C E♭ G A'],
+        ['C', 'mMaj7', 'Cm(maj7)', 'C E♭ G B'], ['C', 'maj7s5', 'Cmaj7♯5', 'C E G♯ B'], ['C', '7s5', 'C7♯5', 'C E G♯ B♭'],
+        ['C', 'add9', 'Cadd9', 'C E G D'], ['C', 'madd9', 'Cmadd9', 'C E♭ G D'], ['C', '6/9', 'C6/9', 'C E G A D'],
+        ['C', '9', 'C9', 'C E G B♭ D'], ['C', 'm9', 'Cm9', 'C E♭ G B♭ D'], ['C', 'maj9', 'Cmaj9', 'C E G B D'],
+        ['C', '7b9', 'C7♭9', 'C E G B♭ D♭'], ['C', '7s9', 'C7♯9', 'C E G B♭ D♯'],
+        ['C', '11', 'C11', 'C E G B♭ D F'], ['C', '13', 'C13', 'C E G B♭ D A'],
+        ['D', 'sus4', 'Dsus4', 'D G A'], ['A', 'sus2', 'Asus2', 'A B E'], ['E', '5', 'E5', 'E B'],
+        ['E', '7s9', 'E7♯9', 'E G♯ B D F𝄪'], ['G', '9', 'G9', 'G B D F A'], ['A', 'm9', 'Am9', 'A C E G B'],
+        ['F', 'maj9', 'Fmaj9', 'F A C E G'], ['B♭', '6', 'B♭6', 'B♭ D F G'], ['E', 'm6', 'Em6', 'E G B C♯'],
+        ['A', '7b9', 'A7♭9', 'A C♯ E G B♭'], ['D', '13', 'D13', 'D F♯ A C E B'], ['G', '11', 'G11', 'G B D F A C'],
+        ['D', 'add9', 'Dadd9', 'D F♯ A E'], ['E', 'mMaj7', 'Em(maj7)', 'E G B D♯'], ['E', 'madd9', 'Emadd9', 'E G B F♯'],
+        ['G', '6/9', 'G6/9', 'G B D E A'], ['A', '7s5', 'A7♯5', 'A C♯ E♯ G'], ['F', 'maj7s5', 'Fmaj7♯5', 'F A C♯ E'],
+        ['E♭', '7sus4', 'E♭7sus4', 'E♭ A♭ B♭ D♭']
+      ];
+      BOOK.forEach(function (x) {
+        check(G, x[2] + ' = ' + x[3], [T.chordSymbol(x[0], x[1]), chord(x[0], x[1])], [x[2], x[3]]);
+      });
+      check(G, 'Cadd9：D 写 9 / M9，颜色是延伸音', detail('C', 'add9'), 'C/1/R/root E/3/M3/third G/5/P5/fifth D/9/M9/ext');
+      check(G, 'Csus2：D 写 2 / M2，延伸音', detail('C', 'sus2'), 'C/1/R/root D/2/M2/ext G/5/P5/fifth');
+      check(G, 'Csus4：F 写 4 / P4，延伸音', detail('C', 'sus4'), 'C/1/R/root F/4/P4/ext G/5/P5/fifth');
+      check(G, 'C6：A 写 6 / M6，延伸音', detail('C', '6'), 'C/1/R/root E/3/M3/third G/5/P5/fifth A/6/M6/ext');
+      check(G, 'C7♯9：D♯ 写 ♯9 / A9', detail('C', '7s9').split(' ')[4], 'D♯/♯9/A9/ext');
+      check(G, 'C7♭9：D♭ 写 ♭9 / m9', detail('C', '7b9').split(' ')[4], 'D♭/♭9/m9/ext');
+      check(G, 'C11：F 写 11 / P11', detail('C', '11').split(' ')[5], 'F/11/P11/ext');
+      check(G, 'C13：A 写 13 / M13', detail('C', '13').split(' ')[5], 'A/13/M13/ext');
+      check(G, 'C5：只有根音和五音', detail('C', '5'), 'C/1/R/root G/5/P5/fifth');
+      check(G, 'C7♯5：G♯ 写 ♯5 / A5，仍是五音颜色', detail('C', '7s5').split(' ')[2], 'G♯/♯5/A5/fifth');
+      check(G, '音阶里的 2、4、6 仍是“其他”（不是延伸音）',
+        T.scaleNotes('C', 'major').filter(function (n, i) { return i === 1 || i === 3 || i === 5; }).map(function (n) { return n.role; }),
+        ['other', 'other', 'other']);
+      var m = T.combine('C', 'major', 'C', 'add9');
+      check(G, 'C 大调 + Cadd9：D 是和弦音（延伸音、写 9），F A B 淡色',
+        [m[2].kind, m[2].role, m[2].degree, m[5].kind, m[9].kind, m[11].kind], ['chord', 'ext', '9', 'muted', 'muted', 'muted']);
+      var m2 = T.combine('C', 'major', 'E', '7s9');
+      check(G, 'C 大调 + E7♯9：F𝄪（=G）在音阶里，不是调外音；G♯ 是调外音',
+        [m2[7].name, m2[7].outside, m2[8].outside], ['F𝄪', false, true]);
+      check(G, '按音级组成找得到新和弦：1 ♭3 5 7 → m(maj7)、1 3 ♯5 7 → maj7♯5',
+        [T.chordByDegrees(['1', '♭3', '5', '7']).id, T.chordByDegrees(['1', '3', '♯5', '7']).id], ['mMaj7', 'maj7s5']);
+      check(G, '顺阶和弦不受影响：C 大调七和弦仍是 Imaj7 … viiø7',
+        dia('C', 'major', 4), 'Imaj7 Cmaj7 | ii7 Dm7 | iii7 Em7 | IVmaj7 Fmaj7 | V7 G7 | vi7 Am7 | viiø7 Bm7♭5');
+      check(G, '下拉框分组：每个和弦都有分组，分组都存在', T.CHORDS.filter(function (c) {
+        return !T.CHORD_GROUPS.some(function (g) { return g.id === c.group; });
+      }).map(function (c) { return c.id; }), []);
     });
 
     // ---------- v0.3 顺阶和弦：标准答案（全部独立写死，不借用 theory.js 的数据） ----------
     G = '顺阶和弦（标准答案）';
-    var dia = function (root, sc, size) {
-      return T.diatonicChords(root, sc, size).map(function (x) { return x.roman + ' ' + x.symbol; }).join(' | ');
-    };
     safe(G, '顺阶和弦', function () {
       var BOOK = [
         ['C', 'major', 3, 'I C | ii Dm | iii Em | IV F | V G | vi Am | vii° Bdim'],

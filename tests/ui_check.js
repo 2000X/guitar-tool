@@ -294,7 +294,7 @@ const def = (scheme, key) => themeItems.find(i => i.key === key)[scheme];
     const chips = sel => page.$$eval(sel + ' .lg-note b', bs => bs.map(b => b.textContent).join(' '));
 
     check('默认不显示和弦（第 2 步的行为不变）', await page.inputValue('#chord-select') === 'none');
-    check('和弦类型有 9 种 + “不显示”', await page.locator('#chord-select option').count() === 10);
+    check('和弦类型有 28 种 + “不显示”（v0.4 起）', await page.locator('#chord-select option').count() === 29);
 
     // 标准答案 #8：C 大调 + G7
     await page.selectOption('#root-select', 'C');
@@ -662,6 +662,127 @@ const def = (scheme, key) => themeItems.find(i => i.key === key)[scheme];
     await page.setViewportSize({ width: 2400, height: 1300 });
     await page.screenshot({ path: path.join(outDir, 'v03_2400_dark.png') });
     check('页面无报错（顺阶和弦 深色）', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
+  // ---------- v0.4 第 1 步：扩充和弦库 ----------
+  {
+    const { context, page, errors } = await openPage('index.html', { colorScheme: 'light', viewport: { width: 1400, height: 820 } });
+    const dots = () => page.evaluate(() => [...document.querySelectorAll('.pos')].filter(g => g.querySelector('.dot')).map(g => {
+      const d = g.querySelector('.dot');
+      return { s: +g.dataset.string, f: +g.dataset.fret, text: d.querySelector('text').textContent, kind: d.dataset.kind,
+        role: d.dataset.role, outside: d.dataset.outside === '1', fill: getComputedStyle(d.querySelector('.body')).fill };
+    }));
+    const at = (list, s, f) => list.find(d => d.s === s && d.f === f);
+    const chips = sel => page.$$eval(sel + ' .lg-note b', bs => bs.map(b => b.textContent).join(' '));
+    const extKey = () => page.locator('#legend .lg-key.role-ext').count();
+    const EXT = hexToRgb(def('light', 'deg-ext'));
+
+    // 下拉框：分组和顺序（独立写死）
+    const groups = await page.$$eval('#chord-select optgroup', gs => gs.map(g => g.label + ':' + [...g.querySelectorAll('option')].map(o => o.value).join(',')));
+    check('和弦下拉框分 5 组，顺序和内容正确', JSON.stringify(groups) === JSON.stringify([
+      '三和弦:maj,m,dim,aug', '挂留 / 强力和弦:sus2,sus4,7sus4,5', '六和弦:6,m6',
+      '七和弦:maj7,m7,7,m7b5,dim7,mMaj7,maj7s5,7s5', '九和弦及以上:add9,madd9,6/9,9,m9,maj9,7b9,7s9,11,13']), groups);
+    const texts = await page.$$eval('#chord-select option', os => os.map(o => o.textContent));
+    check('下拉框显示“中文名（写法）”：如 加九（add9）、强力和弦（5）、小大七（m(maj7)）',
+      texts.includes('加九（add9）') && texts.includes('强力和弦（5）') && texts.includes('小大七（m(maj7)）') && texts.includes('属七升九（7♯9）'), texts.join(' '));
+
+    // 只开和弦：Cadd9
+    await page.selectOption('#scale-select', 'none');
+    await page.selectOption('#chord-root-select', 'C');
+    await page.selectOption('#chord-select', 'add9');
+    let d = await dots();
+    check('只开 Cadd9：D（4 弦 0 品）是绿色延伸音', at(d, 4, 0)?.role === 'ext' && at(d, 4, 0)?.fill === EXT, at(d, 4, 0));
+    check('只开 Cadd9：只标 C E G D', JSON.stringify([...new Set(d.map(x => x.text))].sort()) === JSON.stringify(['C', 'D', 'E', 'G']));
+    check('Cadd9 图例 = C E G D，并列出“延伸音”颜色说明', await chips('#lg-chord') === 'C E G D' && await extKey() === 1);
+    await page.click('#label-mode [data-label="degree"]');
+    d = await dots();
+    check('Cadd9 音级：D 显示 9（不是 2）', at(d, 4, 0)?.text === '9', at(d, 4, 0));
+    await page.click('#label-mode [data-label="interval"]');
+    d = await dots();
+    check('Cadd9 音程：D 显示 M9', at(d, 4, 0)?.text === 'M9', at(d, 4, 0));
+
+    // 叠加：C 大调 + Cadd9
+    await page.selectOption('#scale-select', 'major');
+    await page.click('#label-mode [data-label="degree"]');
+    d = await dots();
+    check('C 大调 + Cadd9：D 是和弦音（绿色），F 是淡色', at(d, 4, 0)?.kind === 'chord' && at(d, 4, 0)?.fill === EXT && at(d, 4, 3)?.kind === 'muted');
+    await page.screenshot({ path: path.join(outDir, 'v04_C_major_Cadd9_degree_light.png') });
+
+    // C13：13 音
+    await page.selectOption('#chord-select', '13');
+    d = await dots();
+    check('C13 音级：A（5 弦 0 品）显示 13，绿色；B♭ 是调外音', at(d, 5, 0)?.text === '13' && at(d, 5, 0)?.fill === EXT && at(d, 5, 1)?.outside === true,
+      [at(d, 5, 0), at(d, 5, 1)]);
+    await page.click('#label-mode [data-label="interval"]');
+    await page.screenshot({ path: path.join(outDir, 'v04_C_major_C13_interval_light.png') });
+
+    // 没有延伸音的和弦不列“延伸音”
+    await page.selectOption('#chord-root-select', 'G');
+    await page.selectOption('#chord-select', '7');
+    check('G7 没有延伸音 → 图例不列“延伸音”', await extKey() === 0);
+    await page.selectOption('#chord-select', '5');
+    check('G5 = G D，没有延伸音', await chips('#lg-chord') === 'G D' && await extKey() === 0);
+    await page.selectOption('#chord-select', 'sus4');
+    await page.click('#label-mode [data-label="degree"]');
+    d = await dots();
+    check('Gsus4：C（5 弦 3 品）显示 4，绿色', at(d, 5, 3)?.text === '4' && at(d, 5, 3)?.fill === EXT, at(d, 5, 3));
+    // 只开音阶时 2、4、6 仍是灰色
+    await page.selectOption('#chord-select', 'none');
+    d = await dots();
+    check('只开 C 大调：D 仍是灰色“其他”，不是绿色', at(d, 4, 0)?.fill === hexToRgb(def('light', 'deg-other')) && await extKey() === 0);
+
+    // E7♯9：重升号
+    await page.click('#label-mode [data-label="name"]');
+    await page.selectOption('#scale-select', 'none');
+    await page.selectOption('#chord-root-select', 'E');
+    await page.selectOption('#chord-select', '7s9');
+    d = await dots();
+    check('E7♯9：6 弦 3 品写 F𝄪（按和弦严格拼写），绿色', at(d, 6, 3)?.text === 'F𝄪' && at(d, 6, 3)?.fill === EXT, at(d, 6, 3));
+    check('E7♯9 图例 = E G♯ B D F𝄪', await chips('#lg-chord') === 'E G♯ B D F𝄪');
+
+    // 理论写法根音 + 拼不出来的新和弦：C♯ 大调 iii（E♯m）→ 改成 7♯9 → 自动换成 F7♯9
+    await page.selectOption('#scale-select', 'major');
+    await page.selectOption('#root-select', 'C♯');
+    await page.click('#dia-size [data-size="3"]');
+    await page.click('#dia-buttons .dia-btn[data-step="3"]');
+    check('C♯ 大调 iii → 和弦根音 E♯', await page.inputValue('#chord-root-select') === 'E♯');
+    await page.selectOption('#chord-select', '7s9');
+    check('E♯7♯9 拼不出（要三个升号）→ 自动换成 F7♯9 = F A C E♭ G♯',
+      await page.inputValue('#chord-root-select') === 'F' && await chips('#lg-chord') === 'F A C E♭ G♯', await chips('#lg-chord'));
+
+    // 记住新和弦
+    await page.selectOption('#chord-select', '6/9');
+    await page.reload();
+    check('刷新后记住新和弦类型（6/9）', await page.inputValue('#chord-select') === '6/9' && await chips('#lg-chord') === 'F A C D G');
+
+    // 调色面板
+    await page.click('#color-btn');
+    check('调色面板里有“延伸音”一项', await page.locator('.cp-item[data-key="deg-ext"]').count() === 1);
+    await page.$eval('.cp-item[data-key="deg-ext"] input[type="color"]', el => {
+      el.focus(); el.value = '#123456'; el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    d = await dots();
+    check('调色面板改“延伸音”→ 圆点立刻变色', d.some(x => x.role === 'ext' && x.fill === 'rgb(18, 52, 86)'));
+    await page.click('#cp-reset');
+    await page.click('#cp-close');
+    check('页面无报错（v0.4 和弦库）', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    const { context, page, errors } = await openPage('index.html', { colorScheme: 'dark', viewport: { width: 1400, height: 820 } });
+    await page.selectOption('#root-select', 'A');
+    await page.selectOption('#scale-select', 'natural-minor');
+    await page.selectOption('#chord-root-select', 'A');
+    await page.selectOption('#chord-select', 'm9');
+    await page.click('#label-mode [data-label="degree"]');
+    await page.screenshot({ path: path.join(outDir, 'v04_A_minor_Am9_degree_dark.png') });
+    await page.selectOption('#scale-select', 'none');
+    await page.selectOption('#chord-root-select', 'E');
+    await page.selectOption('#chord-select', '7s9');
+    await page.click('#label-mode [data-label="name"]');
+    await page.screenshot({ path: path.join(outDir, 'v04_E7s9_name_dark.png') });
+    check('页面无报错（v0.4 深色）', errors.length === 0, errors.join(' | '));
     await context.close();
   }
 

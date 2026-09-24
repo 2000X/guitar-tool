@@ -125,7 +125,7 @@
 
   // ---------------- 圆点：音阶 + 和弦 ----------------
 
-  var ROLE_NAMES = { root: '根音', third: '三音', fifth: '五音', seventh: '七音', other: '其他' };
+  var ROLE_NAMES = { root: '根音', third: '三音', fifth: '五音', seventh: '七音', ext: '延伸音', other: '其他' };
   var KEY_VIEW = 'guitarTool.viewState';
   var DEFAULT_STATE = { root: 'C', scale: 'major', chordRoot: 'C', chord: 'none', label: 'name', frets: T.FRET_COUNT, diatonicSize: 3 };
 
@@ -210,8 +210,11 @@
       html += '</div>';
     }
     html += '</div><div class="lg-keys">';
-    ['root', 'third', 'fifth', 'seventh', 'other'].forEach(function (r) {
-      if (r === 'other' && hasChord) return; // 和弦里没有“其他”
+    // 和弦里没有“其他”；“延伸音”只在当前和弦有延伸音时列出
+    var hasExt = hasChord && T.chordNotes(state.chordRoot, state.chord).some(function (n) { return n.role === 'ext'; });
+    ['root', 'third', 'fifth', 'seventh', 'ext', 'other'].forEach(function (r) {
+      if (r === 'other' && hasChord) return;
+      if (r === 'ext' && !hasExt) return;
       html += '<span class="lg-key role-' + r + '"><i></i>' + ROLE_NAMES[r] + '</span>';
     });
     if (hasChord && hasScale) {
@@ -332,6 +335,21 @@
     e.preventDefault();
   }
 
+  // 和弦类型下拉框：按分组（三和弦、挂留/强力、六和弦、七和弦、九和弦及以上）列出，每项“中文名（写法）”
+  function fillChordSelect() {
+    var sel = document.getElementById('chord-select');
+    T.CHORD_GROUPS.forEach(function (g) {
+      var og = document.createElement('optgroup'); og.label = g.name;
+      T.CHORDS.filter(function (c) { return c.group === g.id; }).forEach(function (c) {
+        var op = document.createElement('option'); op.value = c.id;
+        op.textContent = c.name + '（' + (c.symbol || '大三') + '）';
+        og.appendChild(op);
+      });
+      sel.appendChild(og);
+    });
+    sel.value = state.chord;
+  }
+
   function setupControls() {
     var roots = T.ROOTS.map(function (r) { return [r, r]; });
     var bind = function (id, key, items, withNone) {
@@ -343,7 +361,8 @@
     bind('root-select', 'root', roots, false);
     bind('scale-select', 'scale', T.SCALES.map(function (x) { return [x.id, x.name]; }), true);
     bind('chord-root-select', 'chordRoot', roots, false);
-    bind('chord-select', 'chord', T.CHORDS.map(function (x) { return [x.id, x.name + '（' + (x.symbol || '大三') + '）']; }), true);
+    bind('chord-select', 'chord', [], true);
+    fillChordSelect();
 
     // 品数：改了要重画整个指板
     var fretSel = document.getElementById('fret-select');

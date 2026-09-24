@@ -117,6 +117,7 @@ header .sub { margin: 0; color: var(--muted); font-size: 13px; }
 .role-fifth .body   { fill: var(--deg-fifth); }
 .role-seventh .body { fill: var(--deg-seventh); }
 .role-other .body   { fill: var(--deg-other); }
+.role-ext .body     { fill: var(--deg-ext); }
 
 /* 图例 */
 .legend {
@@ -137,6 +138,7 @@ header .sub { margin: 0; color: var(--muted); font-size: 13px; }
 .lg-note.role-fifth b   { background: var(--deg-fifth); }
 .lg-note.role-seventh b { background: var(--deg-seventh); }
 .lg-note.role-other b   { background: var(--deg-other); }
+.lg-note.role-ext b     { background: var(--deg-ext); }
 .lg-keys { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
 .lg-key { display: inline-flex; align-items: center; gap: 5px; }
 .lg-key i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
@@ -145,6 +147,7 @@ header .sub { margin: 0; color: var(--muted); font-size: 13px; }
 .lg-key.role-fifth i   { background: var(--deg-fifth); }
 .lg-key.role-seventh i { background: var(--deg-seventh); }
 .lg-key.role-other i   { background: var(--deg-other); }
+.lg-key.role-ext i     { background: var(--deg-ext); }
 
 /* ---------- 第 3 步：和弦叠加 ---------- */
 .ctl-group { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; padding-right: 20px; border-right: 1px solid var(--line); }
