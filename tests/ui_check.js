@@ -310,7 +310,8 @@ const def = (scheme, key) => themeItems.find(i => i.key === key)[scheme];
       at(d, 5, 3)?.kind === 'muted' && at(d, 5, 3)?.ring && at(d, 5, 3)?.fill === hexToRgb(def('light', 'scale-muted')), at(d, 5, 3));
     check('#8 A、E 是淡色', at(d, 6, 5)?.kind === 'muted' && at(d, 6, 0)?.kind === 'muted');
     check('#8 没有调外音', !d.some(x => x.outside));
-    check('#8 图例：G7 = G B D F', (await page.textContent('#lg-chord-title')) === 'G7' && await chips('#lg-chord') === 'G B D F');
+    // v0.3 起：顺阶和弦的图例标题前面加级数
+    check('#8 图例：V7 · G7 = G B D F', (await page.textContent('#lg-chord-title')) === 'V7 · G7' && await chips('#lg-chord') === 'G B D F');
     await page.screenshot({ path: path.join(outDir, 'step3_C_major_G7_light.png') });
     await page.click('#label-mode [data-label="degree"]');
     d = await dots();
@@ -482,6 +483,185 @@ const def = (scheme, key) => themeItems.find(i => i.key === key)[scheme];
     check('手机宽度：指板可以在框内左右滑动', info.wrapScrolls, info);
     await page.screenshot({ path: path.join(outDir, 'v02_phone_dark.png'), fullPage: true });
     check('页面无报错（手机宽度）', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
+  // ---------- v0.3：顺阶和弦 ----------
+  {
+    const { context, page, errors } = await openPage('index.html', { colorScheme: 'light', viewport: { width: 1400, height: 900 } });
+    const btns = () => page.$$eval('#dia-buttons .dia-btn', bs => bs.map(b => b.querySelector('.dia-roman').textContent + ' ' + b.querySelector('.dia-name').textContent).join(' | '));
+    const pressed = () => page.$$eval('#dia-buttons .dia-btn[aria-pressed="true"]', bs => bs.map(b => b.querySelector('.dia-roman').textContent).join(','));
+    const chord = async () => (await page.inputValue('#chord-root-select')) + '/' + (await page.inputValue('#chord-select'));
+    const title = () => page.textContent('#lg-chord-title').catch(() => null);
+    const chips = sel => page.$$eval(sel + ' .lg-note b', bs => bs.map(b => b.textContent).join(' '));
+    const btn = n => '#dia-buttons .dia-btn[data-step="' + n + '"]';
+
+    // 默认：C 大调、三和弦、没有和弦
+    check('顺阶和弦：默认是三和弦', await page.getAttribute('#dia-size [aria-checked="true"]', 'data-size') === '3');
+    check('C 大调三和弦按钮：I C … vii° Bdim',
+      await btns() === 'I C | ii Dm | iii Em | IV F | V G | vi Am | vii° Bdim', await btns());
+    check('按钮旁注明“按 C 大调”', (await page.textContent('#dia-basis')) === '按 C 大调', await page.textContent('#dia-basis'));
+    check('没开和弦时没有按钮高亮', await pressed() === '');
+
+    // 点 V → G；再点 → 关闭
+    await page.click(btn(5));
+    check('点 V → 和弦设成 G 大三', await chord() === 'G/maj', await chord());
+    check('点 V → V 按钮高亮', await pressed() === 'V', await pressed());
+    check('点 V → 图例标题“V · G”，组成音 G B D', (await title()) === 'V · G' && await chips('#lg-chord') === 'G B D', await title());
+    const gDot = await page.$eval('.pos[data-string="6"][data-fret="3"] .dot', d => d.dataset.kind + ':' + d.dataset.role);
+    check('点 V → 指板上 G 是和弦根音', gDot === 'chord:root', gDot);
+    await page.click(btn(5));
+    check('再点 V → 关闭和弦', await chord() === 'G/none' && await pressed() === '', await chord());
+
+    // 切七和弦：当前是顺阶和弦时跟着换
+    await page.click(btn(5));
+    await page.click('#dia-size [data-size="4"]');
+    check('切到七和弦：按钮 Imaj7 Cmaj7 … viiø7 Bm7♭5',
+      await btns() === 'Imaj7 Cmaj7 | ii7 Dm7 | iii7 Em7 | IVmaj7 Fmaj7 | V7 G7 | vi7 Am7 | viiø7 Bm7♭5', await btns());
+    check('切到七和弦：G 跟着换成 G7，V7 高亮', await chord() === 'G/7' && await pressed() === 'V7', [await chord(), await pressed()]);
+    check('图例标题“V7 · G7”，组成音 G B D F', (await title()) === 'V7 · G7' && await chips('#lg-chord') === 'G B D F');
+    await page.screenshot({ path: path.join(outDir, 'v03_C_major_V7_light.png') });
+    await page.click('#dia-size [data-size="3"]');
+    check('切回三和弦：G7 换回 G', await chord() === 'G/maj' && await pressed() === 'V', await chord());
+
+    // 下拉框手动选的也算
+    await page.selectOption('#chord-root-select', 'D');
+    await page.selectOption('#chord-select', 'm');
+    check('下拉框选 Dm → ii 高亮，图例“ii · Dm”', await pressed() === 'ii' && (await title()) === 'ii · Dm', [await pressed(), await title()]);
+    await page.selectOption('#chord-root-select', 'E');
+    await page.selectOption('#chord-select', '7');
+    check('下拉框选 E7（不是顺阶和弦）→ 没有高亮，图例只写“E7”', await pressed() === '' && (await title()) === 'E7', [await pressed(), await title()]);
+    await page.selectOption('#chord-root-select', 'B');
+    await page.selectOption('#chord-select', 'm7b5');
+    check('三和弦模式下选 Bm7♭5：按钮不高亮，但图例仍写“viiø7 · Bm7♭5”', await pressed() === '' && (await title()) === 'viiø7 · Bm7♭5', [await pressed(), await title()]);
+    await page.click('#dia-size [data-size="4"]');
+    check('这时切到七和弦 → viiø7 高亮，和弦不变', await pressed() === 'viiø7' && await chord() === 'B/m7b5');
+    await page.click('#dia-size [data-size="3"]');
+    check('再切回三和弦 → 跟着换成 Bdim', await chord() === 'B/dim' && await pressed() === 'vii°', await chord());
+
+    // F 大调：IV 是 B♭
+    await page.selectOption('#root-select', 'F');
+    check('F 大调三和弦：I F … IV B♭ … vii° Edim',
+      await btns() === 'I F | ii Gm | iii Am | IV B♭ | V C | vi Dm | vii° Edim', await btns());
+    await page.click(btn(4));
+    check('F 大调点 IV → 和弦根音 B♭（不是 A♯）', await chord() === 'B♭/maj', await chord());
+
+    // E 大调、A 自然小调
+    await page.selectOption('#root-select', 'E');
+    check('E 大调三和弦：E F♯m G♯m A B C♯m D♯dim',
+      await btns() === 'I E | ii F♯m | iii G♯m | IV A | V B | vi C♯m | vii° D♯dim', await btns());
+    await page.selectOption('#root-select', 'A');
+    await page.selectOption('#scale-select', 'natural-minor');
+    check('A 自然小调三和弦：i Am ii° Bdim III C iv Dm v Em VI F VII G',
+      await btns() === 'i Am | ii° Bdim | III C | iv Dm | v Em | VI F | VII G', await btns());
+    await page.click('#dia-size [data-size="4"]');
+    check('A 自然小调七和弦：i7 Am7 iiø7 Bm7♭5 IIImaj7 Cmaj7 iv7 Dm7 v7 Em7 VImaj7 Fmaj7 VII7 G7',
+      await btns() === 'i7 Am7 | iiø7 Bm7♭5 | IIImaj7 Cmaj7 | iv7 Dm7 | v7 Em7 | VImaj7 Fmaj7 | VII7 G7', await btns());
+
+    // 五声、布鲁斯按母音阶
+    await page.selectOption('#scale-select', 'minor-pentatonic');
+    check('A 小调五声 → “按 A 自然小调”，按钮同 A 自然小调', (await page.textContent('#dia-basis')) === '按 A 自然小调'
+      && await btns() === 'i7 Am7 | iiø7 Bm7♭5 | IIImaj7 Cmaj7 | iv7 Dm7 | v7 Em7 | VImaj7 Fmaj7 | VII7 G7');
+    await page.selectOption('#scale-select', 'blues');
+    check('A 布鲁斯 → “按 A 自然小调”', (await page.textContent('#dia-basis')) === '按 A 自然小调');
+    await page.selectOption('#root-select', 'C');
+    await page.selectOption('#scale-select', 'major-pentatonic');
+    check('C 大调五声 → “按 C 大调”', (await page.textContent('#dia-basis')) === '按 C 大调'
+      && (await btns()).startsWith('Imaj7 Cmaj7 | ii7 Dm7'));
+    await page.click('#dia-size [data-size="3"]');
+
+    // 理论调：C♯ 大调的 iii 是 E♯m
+    await page.selectOption('#root-select', 'C♯');
+    await page.selectOption('#scale-select', 'major');
+    check('C♯ 大调三和弦：… iii E♯m … vii° B♯dim',
+      await btns() === 'I C♯ | ii D♯m | iii E♯m | IV F♯ | V G♯ | vi A♯m | vii° B♯dim', await btns());
+    await page.click(btn(3));
+    check('点 iii → 和弦根音下拉框显示 E♯', await chord() === 'E♯/m', await chord());
+    const og = await page.$$eval('#chord-root-select optgroup option', os => os.map(o => o.value));
+    check('E♯ 列在下拉框的“按调拼写”里（只多这一项）', JSON.stringify(og) === JSON.stringify(['E♯']), og);
+    check('图例：iii · E♯m = E♯ G♯ B♯', (await title()) === 'iii · E♯m' && await chips('#lg-chord') === 'E♯ G♯ B♯');
+    const eSharp = await page.$eval('.pos[data-string="6"][data-fret="1"] .dot text', t => t.textContent);
+    check('指板上 6 弦 1 品写 E♯（不是 F）', eSharp === 'E♯', eSharp);
+    await page.screenshot({ path: path.join(outDir, 'v03_Csharp_major_iii_light.png') });
+    await page.reload();
+    check('刷新后记住 E♯ 这个写法', await chord() === 'E♯/m', await chord());
+    await page.selectOption('#chord-root-select', 'C');
+    check('选回常用根音后，“按调拼写”一项消失', await page.locator('#chord-root-select optgroup').count() === 0);
+    // 理论写法拼不出来的和弦 → 自动换常用写法
+    await page.selectOption('#root-select', 'A♯');
+    await page.click(btn(7));
+    check('A♯ 大调点 vii° → G𝄪dim', await chord() === 'G𝄪/dim', await chord());
+    await page.selectOption('#chord-select', 'maj7');
+    check('G𝄪 配大七拼不出来（要三个升号）→ 自动换成 Amaj7，不报错', await chord() === 'A/maj7', await chord());
+
+    // 键盘快捷键
+    await page.selectOption('#root-select', 'C');
+    await page.selectOption('#chord-select', 'none');
+    await page.click('#dia-basis'); // 把焦点从下拉框移开
+    await page.keyboard.press('2');
+    check('键盘 2 → ii（Dm）', await chord() === 'D/m' && await pressed() === 'ii', await chord());
+    await page.keyboard.press('2');
+    check('再按 2 → 关闭和弦', await page.inputValue('#chord-select') === 'none');
+    await page.keyboard.press('5');
+    await page.keyboard.press('t');
+    check('按 T → 切到七和弦，G 变 G7', await page.getAttribute('#dia-size [aria-checked="true"]', 'data-size') === '4' && await chord() === 'G/7');
+    await page.keyboard.press('Shift+T');
+    check('按大写 T 也能切回三和弦', await page.getAttribute('#dia-size [aria-checked="true"]', 'data-size') === '3' && await chord() === 'G/maj');
+    await page.keyboard.press('0');
+    check('按 0 → 关闭和弦', await page.inputValue('#chord-select') === 'none');
+    await page.keyboard.press('7');
+    await page.keyboard.press('Escape');
+    check('按 7 再按 Esc → 关闭和弦', await page.inputValue('#chord-select') === 'none');
+    await page.keyboard.press('8');
+    check('按 8 没反应', await page.inputValue('#chord-select') === 'none');
+    await page.focus('#fret-select');
+    await page.keyboard.press('3');
+    check('焦点在下拉框里时，数字键不切和弦', await page.inputValue('#chord-select') === 'none' && await page.inputValue('#fret-select') === '15');
+    await page.click('#dia-basis');
+    await page.keyboard.press('Control+3');
+    check('按 Ctrl+3 不算快捷键', await page.inputValue('#chord-select') === 'none');
+
+    // 没选音阶
+    await page.selectOption('#scale-select', 'none');
+    check('没选音阶 → 按钮隐藏，显示提示', await page.isHidden('#dia-buttons') && await page.isVisible('#dia-empty'));
+    await page.click('#dia-empty');
+    await page.keyboard.press('1');
+    check('没选音阶时按 1 没反应', await page.inputValue('#chord-select') === 'none');
+    await page.selectOption('#scale-select', 'major');
+
+    // 调色面板
+    await page.click(btn(1));
+    await page.click('#color-btn');
+    await page.$eval('.cp-item[data-key="dia-active"] input[type="color"]', el => {
+      el.focus(); el.value = '#00aa00'; el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const bg = await page.$eval(btn(1), b => getComputedStyle(b).backgroundColor);
+    check('调色面板改“当前和弦按钮底色”→ 高亮按钮立刻变色', bg === 'rgb(0, 170, 0)', bg);
+    await page.click('#cp-reset');
+    const bg2 = await page.$eval(btn(1), b => getComputedStyle(b).backgroundColor);
+    check('高亮按钮默认底色来自 theme.js', bg2 === hexToRgb(def('light', 'dia-active')), bg2);
+    await page.click('#cp-close');
+    await page.click('#dia-size [data-size="4"]');
+    await page.reload();
+    check('刷新后记住“七和弦”', await page.getAttribute('#dia-size [aria-checked="true"]', 'data-size') === '4' && await pressed() === 'Imaj7');
+    check('页面没有横向滚动条（顺阶和弦 1400 宽）', !(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)));
+    check('页面无报错（顺阶和弦）', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    const { context, page, errors } = await openPage('index.html', { colorScheme: 'dark', viewport: { width: 1400, height: 900 } });
+    await page.selectOption('#root-select', 'A');
+    await page.selectOption('#scale-select', 'natural-minor');
+    await page.click('#dia-size [data-size="4"]');
+    await page.click('#dia-buttons .dia-btn[data-step="5"]');
+    await page.click('#label-mode [data-label="degree"]');
+    await page.screenshot({ path: path.join(outDir, 'v03_A_minor_v7_degree_dark.png') });
+    await page.setViewportSize({ width: 390, height: 844 });
+    check('手机宽度：顺阶和弦一行不会撑出横向滚动', !(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)));
+    await page.screenshot({ path: path.join(outDir, 'v03_phone_dark.png'), fullPage: true });
+    await page.setViewportSize({ width: 2400, height: 1300 });
+    await page.screenshot({ path: path.join(outDir, 'v03_2400_dark.png') });
+    check('页面无报错（顺阶和弦 深色）', errors.length === 0, errors.join(' | '));
     await context.close();
   }
 

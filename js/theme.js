@@ -45,6 +45,10 @@
       { key: 'scale-root-ring',  label: '音阶根音描边（实线圈）', light: '#1f2328', dark: '#e7e7e7' },
       { key: 'outside-mark',     label: '调外音标记（虚线圈）',   light: '#bf3989', dark: '#f778ba' }
     ]},
+    { name: '顺阶和弦按钮', items: [
+      { key: 'dia-active',      label: '当前和弦按钮底色',   light: '#1f2328', dark: '#e7e7e7' },
+      { key: 'dia-active-text', label: '当前和弦按钮文字',   light: '#ffffff', dark: '#1d2024' }
+    ]},
     { name: '自检页', items: [
       { key: 'pass', label: '通过 ✓',   light: '#1a7f37', dark: '#4ac26b' },
       { key: 'fail', label: '失败 ✗',   light: '#cf222e', dark: '#ff7b72' },

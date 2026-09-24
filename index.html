@@ -12,7 +12,7 @@
     <header>
       <div>
         <h1>吉他指板</h1>
-        <p class="sub">v0.2</p>
+        <p class="sub">v0.3 开发中：顺阶和弦</p>
       </div>
       <div class="toolbar">
         <div id="zoom-ctl"></div>
@@ -43,6 +43,19 @@
             <button type="button" role="radio" data-label="interval">音程</button>
           </div>
         </div>
+      </div>
+      <div class="diatonic" id="diatonic">
+        <div class="dia-head">
+          <span class="ctl-title">顺阶和弦</span>
+          <div class="segmented" id="dia-size" role="radiogroup" aria-label="三和弦或七和弦">
+            <button type="button" role="radio" data-size="3">三和弦</button>
+            <button type="button" role="radio" data-size="4">七和弦</button>
+          </div>
+          <span class="dia-basis" id="dia-basis"></span>
+        </div>
+        <div class="dia-buttons" id="dia-buttons" role="group" aria-label="顺阶和弦"></div>
+        <span class="dia-empty" id="dia-empty" hidden>先在“音阶”里选一个音阶，这里会列出它的顺阶和弦</span>
+        <span class="dia-keys" id="dia-keys">键盘：1～7 选和弦 · 0 关闭 · T 三/七和弦</span>
       </div>
       <div class="board-wrap">
         <svg id="fretboard" role="img" aria-label="吉他指板，标准调弦"></svg>

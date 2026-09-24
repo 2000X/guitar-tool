@@ -127,20 +127,26 @@
 
   var ROLE_NAMES = { root: '根音', third: '三音', fifth: '五音', seventh: '七音', other: '其他' };
   var KEY_VIEW = 'guitarTool.viewState';
-  var DEFAULT_STATE = { root: 'C', scale: 'major', chordRoot: 'C', chord: 'none', label: 'name', frets: T.FRET_COUNT };
+  var DEFAULT_STATE = { root: 'C', scale: 'major', chordRoot: 'C', chord: 'none', label: 'name', frets: T.FRET_COUNT, diatonicSize: 3 };
 
   // 读取上次的设置（读不到或不合法就用默认值）
   function loadState() {
     var st = {};
     try { st = JSON.parse(window.localStorage.getItem(KEY_VIEW) || '{}') || {}; } catch (e) { st = {}; }
     var okRoot = function (r) { return T.ROOTS.indexOf(r) >= 0; };
+    // 和弦根音还允许按调拼写出来的理论写法（E♯、B♯、F𝄪、C♭、B𝄫……）
+    var okChordRoot = function (r) {
+      if (okRoot(r)) return true;
+      try { return typeof r === 'string' && T.parseNote(r).name === r; } catch (e) { return false; }
+    };
     return {
       root: okRoot(st.root) ? st.root : DEFAULT_STATE.root,
       scale: st.scale === 'none' || T.SCALES.some(function (x) { return x.id === st.scale; }) ? st.scale : DEFAULT_STATE.scale,
-      chordRoot: okRoot(st.chordRoot) ? st.chordRoot : DEFAULT_STATE.chordRoot,
+      chordRoot: okChordRoot(st.chordRoot) ? st.chordRoot : DEFAULT_STATE.chordRoot,
       chord: st.chord === 'none' || T.CHORDS.some(function (x) { return x.id === st.chord; }) ? st.chord : DEFAULT_STATE.chord,
       label: ['name', 'degree', 'interval'].indexOf(st.label) >= 0 ? st.label : DEFAULT_STATE.label,
-      frets: st.frets >= T.MIN_FRETS && st.frets <= T.MAX_FRETS && st.frets % 1 === 0 ? st.frets : DEFAULT_STATE.frets
+      frets: st.frets >= T.MIN_FRETS && st.frets <= T.MAX_FRETS && st.frets % 1 === 0 ? st.frets : DEFAULT_STATE.frets,
+      diatonicSize: st.diatonicSize === 4 ? 4 : 3
     };
   }
   function saveState() {
@@ -185,7 +191,9 @@
     var html = '<div class="lg-lines">';
     if (hasChord) {
       var cn = T.chordNotes(state.chordRoot, state.chord);
+      var dm = T.diatonicMatch(state.root, state.scale, state.chordRoot, state.chord);
       html += '<div class="lg-notes" id="lg-chord"><span class="lg-title" id="lg-chord-title">'
+        + (dm ? '<span class="lg-roman">' + dm.item.roman + '</span> · ' : '')
         + T.chordSymbol(state.chordRoot, state.chord) + '</span>';
       cn.forEach(function (n) {
         var out = map[n.pc] && map[n.pc].outside;
@@ -221,13 +229,116 @@
     });
   }
 
+  // 和弦根音下拉框：17 个常用写法；当前根音是理论写法（如 E♯）时，另外多列一项
+  function syncChordRootSelect() {
+    var sel = document.getElementById('chord-root-select');
+    var extra = sel.querySelector('optgroup');
+    if (extra) sel.removeChild(extra);
+    if (T.ROOTS.indexOf(state.chordRoot) < 0) {
+      var og = document.createElement('optgroup'); og.label = '按调拼写';
+      var op = document.createElement('option'); op.value = state.chordRoot; op.textContent = state.chordRoot;
+      og.appendChild(op); sel.appendChild(og);
+    }
+    sel.value = state.chordRoot;
+  }
+
+  // 理论写法的根音配某些和弦会拼不出来（需要三个升降号），这时换成常用写法
+  function normalizeChordRoot() {
+    if (state.chord === 'none') return;
+    try { T.chordNotes(state.chordRoot, state.chord); } catch (e) { state.chordRoot = T.simplifyNote(state.chordRoot); }
+  }
+
+  // 任何设置改变后都走这里：检查、保存、同步选择栏、重画圆点和顺阶和弦
+  function update() {
+    normalizeChordRoot();
+    saveState();
+    document.getElementById('root-select').value = state.root;
+    document.getElementById('scale-select').value = state.scale;
+    document.getElementById('chord-select').value = state.chord;
+    syncChordRootSelect();
+    renderDots();
+    renderDiatonic();
+  }
+
+  // ---------------- 顺阶和弦 ----------------
+
+  function currentDiatonic() { return T.diatonicChords(state.root, state.scale, state.diatonicSize); }
+
+  function renderDiatonic() {
+    var list = currentDiatonic();
+    var box = document.getElementById('dia-buttons');
+    var basis = document.getElementById('dia-basis');
+    var empty = document.getElementById('dia-empty');
+    document.getElementById('dia-size').querySelectorAll('button').forEach(function (b) {
+      b.setAttribute('aria-checked', +b.getAttribute('data-size') === state.diatonicSize ? 'true' : 'false');
+    });
+    box.innerHTML = '';
+    if (!list.length) {
+      basis.textContent = ''; basis.hidden = true; empty.hidden = false; box.hidden = true;
+      return;
+    }
+    var base = T.getScale(T.diatonicBase(state.scale));
+    basis.textContent = '按 ' + state.root + ' ' + base.name; basis.hidden = false;
+    empty.hidden = true; box.hidden = false;
+    var cur = state.chord === 'none' ? null : { pc: T.parseNote(state.chordRoot).pc, chord: state.chord };
+    list.forEach(function (x) {
+      var on = !!cur && cur.pc === x.pc && cur.chord === x.chord;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'dia-btn';
+      b.setAttribute('data-step', x.step);
+      b.setAttribute('data-root', x.root);
+      b.setAttribute('data-chord', x.chord);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.title = '第 ' + x.step + ' 级：' + x.symbol + ' = ' + x.notes.join(' ') + '（键盘 ' + x.step + '）';
+      b.innerHTML = '<span class="dia-roman">' + x.roman + '</span><span class="dia-name">' + x.symbol + '</span>';
+      b.addEventListener('click', function () { pickStep(x.step); });
+      box.appendChild(b);
+    });
+  }
+
+  // 选第几级：已经是它就关闭和弦，否则切换到它
+  function pickStep(step) {
+    var x = currentDiatonic()[step - 1];
+    if (!x) return;
+    var on = state.chord === x.chord && T.parseNote(state.chordRoot).pc === x.pc;
+    if (on) { state.chord = 'none'; }
+    else { state.chordRoot = x.root; state.chord = x.chord; }
+    update();
+  }
+
+  // 三和弦 / 七和弦切换：当前是顺阶和弦时，跟着换成同一级的另一种（G ↔ G7）
+  function setDiatonicSize(size) {
+    if (size === state.diatonicSize) return;
+    var m = T.diatonicMatch(state.root, state.scale, state.chordRoot, state.chord);
+    state.diatonicSize = size;
+    if (m && m.size !== size) {
+      var x = currentDiatonic()[m.item.step - 1];
+      state.chordRoot = x.root; state.chord = x.chord;
+    }
+    update();
+  }
+
+  // 键盘：1～7 选级数（再按一次关闭），0 / Esc 关闭和弦，T 切换三和弦/七和弦
+  function onKey(e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var t = e.target, tag = t && t.tagName;
+    if (tag === 'SELECT' || tag === 'INPUT' || tag === 'TEXTAREA' || (t && t.isContentEditable)) return;
+    var k = e.key;
+    if (k >= '1' && k <= '7' && k.length === 1) { pickStep(+k); }
+    else if (k === '0' || k === 'Escape') { if (state.chord === 'none') return; state.chord = 'none'; update(); }
+    else if (k === 't' || k === 'T') { setDiatonicSize(state.diatonicSize === 3 ? 4 : 3); }
+    else return;
+    e.preventDefault();
+  }
+
   function setupControls() {
     var roots = T.ROOTS.map(function (r) { return [r, r]; });
     var bind = function (id, key, items, withNone) {
       var sel = document.getElementById(id);
       fillSelect(sel, items, withNone);
       sel.value = state[key];
-      sel.addEventListener('change', function () { state[key] = sel.value; saveState(); renderDots(); });
+      sel.addEventListener('change', function () { state[key] = sel.value; update(); });
     };
     bind('root-select', 'root', roots, false);
     bind('scale-select', 'scale', T.SCALES.map(function (x) { return [x.id, x.name]; }), true);
@@ -241,6 +352,11 @@
     }
     fretSel.value = String(state.frets);
     fretSel.addEventListener('change', function () { state.frets = +fretSel.value; saveState(); draw(); renderDots(); });
+
+    document.getElementById('dia-size').querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () { setDiatonicSize(+b.getAttribute('data-size')); });
+    });
+    document.addEventListener('keydown', onKey);
 
     var seg = document.getElementById('label-mode');
     function syncSeg() {
@@ -256,5 +372,5 @@
 
   draw();
   setupControls();
-  renderDots();
+  update();
 })();

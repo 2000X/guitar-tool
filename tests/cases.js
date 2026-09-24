@@ -233,6 +233,88 @@
       check(G, '全部 ' + count + ' 个和弦音的音高和字母都正确（按三度叠置）', bad, []);
     });
 
+    // ---------- v0.3 顺阶和弦：标准答案（全部独立写死，不借用 theory.js 的数据） ----------
+    G = '顺阶和弦（标准答案）';
+    var dia = function (root, sc, size) {
+      return T.diatonicChords(root, sc, size).map(function (x) { return x.roman + ' ' + x.symbol; }).join(' | ');
+    };
+    safe(G, '顺阶和弦', function () {
+      var BOOK = [
+        ['C', 'major', 3, 'I C | ii Dm | iii Em | IV F | V G | vi Am | vii° Bdim'],
+        ['C', 'major', 4, 'Imaj7 Cmaj7 | ii7 Dm7 | iii7 Em7 | IVmaj7 Fmaj7 | V7 G7 | vi7 Am7 | viiø7 Bm7♭5'],
+        ['F', 'major', 3, 'I F | ii Gm | iii Am | IV B♭ | V C | vi Dm | vii° Edim'],
+        ['F', 'major', 4, 'Imaj7 Fmaj7 | ii7 Gm7 | iii7 Am7 | IVmaj7 B♭maj7 | V7 C7 | vi7 Dm7 | viiø7 Em7♭5'],
+        ['E', 'major', 3, 'I E | ii F♯m | iii G♯m | IV A | V B | vi C♯m | vii° D♯dim'],
+        ['E', 'major', 4, 'Imaj7 Emaj7 | ii7 F♯m7 | iii7 G♯m7 | IVmaj7 Amaj7 | V7 B7 | vi7 C♯m7 | viiø7 D♯m7♭5'],
+        ['A', 'natural-minor', 3, 'i Am | ii° Bdim | III C | iv Dm | v Em | VI F | VII G'],
+        ['A', 'natural-minor', 4, 'i7 Am7 | iiø7 Bm7♭5 | IIImaj7 Cmaj7 | iv7 Dm7 | v7 Em7 | VImaj7 Fmaj7 | VII7 G7'],
+        // 理论调：根音会用到 E♯、B♯
+        ['C♯', 'major', 3, 'I C♯ | ii D♯m | iii E♯m | IV F♯ | V G♯ | vi A♯m | vii° B♯dim'],
+        // 五声、布鲁斯按母音阶
+        ['C', 'major-pentatonic', 3, 'I C | ii Dm | iii Em | IV F | V G | vi Am | vii° Bdim'],
+        ['A', 'minor-pentatonic', 4, 'i7 Am7 | iiø7 Bm7♭5 | IIImaj7 Cmaj7 | iv7 Dm7 | v7 Em7 | VImaj7 Fmaj7 | VII7 G7'],
+        ['E', 'blues', 3, 'i Em | ii° F♯dim | III G | iv Am | v Bm | VI C | VII D']
+      ];
+      var CN = { 'major': '大调', 'natural-minor': '自然小调', 'major-pentatonic': '大调五声（按大调）',
+        'minor-pentatonic': '小调五声（按自然小调）', 'blues': '布鲁斯（按自然小调）' };
+      BOOK.forEach(function (x) {
+        check(G, x[0] + ' ' + CN[x[1]] + (x[2] === 4 ? ' 七和弦' : ' 三和弦') + '：' + x[3], dia(x[0], x[1], x[2]), x[3]);
+      });
+      var notesOf = function (root, sc, size, step) { return T.diatonicChords(root, sc, size)[step - 1].notes.join(' '); };
+      check(G, 'C 大调 V7 = G B D F', notesOf('C', 'major', 4, 5), 'G B D F');
+      check(G, 'F 大调 IVmaj7 = B♭ D F A', notesOf('F', 'major', 4, 4), 'B♭ D F A');
+      check(G, 'C♯ 大调 iii = E♯ G♯ B♯', notesOf('C♯', 'major', 3, 3), 'E♯ G♯ B♯');
+      check(G, '没选音阶时没有顺阶和弦', T.diatonicChords('C', 'none', 3), []);
+      check(G, '母音阶：大调五声→大调，小调五声、布鲁斯→自然小调，大调/自然小调→自己',
+        ['major', 'natural-minor', 'major-pentatonic', 'minor-pentatonic', 'blues'].map(T.diatonicBase),
+        ['major', 'natural-minor', 'major', 'natural-minor', 'natural-minor']);
+      var mt = function (r, sc, cr, c) { var m = T.diatonicMatch(r, sc, cr, c); return m ? m.size + ':' + m.item.roman : null; };
+      check(G, '认出顺阶和弦：C 大调里 G7 是 V7、G 是 V、Bm7♭5 是 viiø7', [mt('C', 'major', 'G', '7'), mt('C', 'major', 'G', 'maj'), mt('C', 'major', 'B', 'm7b5')], ['4:V7', '3:V', '4:viiø7']);
+      check(G, '不是顺阶和弦：C 大调里 E7、Gm、C7 都不是', [mt('C', 'major', 'E', '7'), mt('C', 'major', 'G', 'm'), mt('C', 'major', 'C', '7')], [null, null, null]);
+      check(G, '按音高认：C♯ 大调里下拉框选 Fm 也算 iii', mt('C♯', 'major', 'F', 'm'), '3:iii');
+      check(G, '没开和弦时不算', mt('C', 'major', 'C', 'none'), null);
+      check(G, '理论写法换常用写法：E♯→F、B♯→C、F𝄪→G、C𝄪→D、C♭→B、B𝄫→A、F♭→E',
+        ['E♯', 'B♯', 'F𝄪', 'C𝄪', 'C♭', 'B𝄫', 'F♭'].map(T.simplifyNote), ['F', 'C', 'G', 'D', 'B', 'A', 'E']);
+      check(G, '没有本位音时跟原来的升降号走：B𝄪→C♯、F𝄫→E♭', ['B𝄪', 'F𝄫'].map(T.simplifyNote), ['C♯', 'E♭']);
+      check(G, '常用写法保持不变：C♯、D♭、G♭、A♯', ['C♯', 'D♭', 'G♭', 'A♯'].map(T.simplifyNote), ['C♯', 'D♭', 'G♭', 'A♯']);
+    });
+
+    G = '全面检查：17 个根音 × 大调/自然小调的顺阶和弦';
+    safe(G, '全部组合', function () {
+      var ROOTS17 = ['C', 'C♯', 'D♭', 'D', 'D♯', 'E♭', 'E', 'F', 'F♯', 'G♭', 'G', 'G♯', 'A♭', 'A', 'A♯', 'B♭', 'B'];
+      // 独立写的标准：大调、自然小调每一级的和弦类型和罗马数字
+      var EXPECT = {
+        'major': { 3: ['maj', 'm', 'm', 'maj', 'maj', 'm', 'dim'], 4: ['maj7', 'm7', 'm7', 'maj7', '7', 'm7', 'm7b5'],
+          r3: ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'], r4: ['Imaj7', 'ii7', 'iii7', 'IVmaj7', 'V7', 'vi7', 'viiø7'] },
+        'natural-minor': { 3: ['m', 'dim', 'maj', 'm', 'm', 'maj', 'maj'], 4: ['m7', 'm7b5', 'maj7', 'm7', 'm7', 'maj7', '7'],
+          r3: ['i', 'ii°', 'III', 'iv', 'v', 'VI', 'VII'], r4: ['i7', 'iiø7', 'IIImaj7', 'iv7', 'v7', 'VImaj7', 'VII7'] }
+      };
+      var badType = [], badRoman = [], badRoot = [], badNotes = [], count = 0;
+      ROOTS17.forEach(function (root) {
+        ['major', 'natural-minor'].forEach(function (sc) {
+          var scaleNames = T.scaleNotes(root, sc).map(function (n) { return n.name; });
+          [3, 4].forEach(function (size) {
+            var list = T.diatonicChords(root, sc, size);
+            list.forEach(function (x, i) {
+              count++;
+              var tag = root + ' ' + sc + ' ' + size + '音 第' + (i + 1) + '级 ' + x.symbol;
+              if (x.chord !== EXPECT[sc][size][i]) badType.push(tag);
+              if (x.roman !== EXPECT[sc]['r' + size][i]) badRoman.push(tag + ' ' + x.roman);
+              if (x.root !== scaleNames[i]) badRoot.push(tag);
+              // 组成音：和和弦库算出来的一致，且每个音都是音阶里的音（拼写也一样）
+              var cn = T.chordNotes(x.root, x.chord).map(function (n) { return n.name; });
+              if (cn.join(' ') !== x.notes.join(' ') || !cn.every(function (nm) { return scaleNames.indexOf(nm) >= 0; })) badNotes.push(tag);
+            });
+            if (list.length !== 7) badType.push(root + ' ' + sc + ' 不是 7 个');
+          });
+        });
+      });
+      check(G, '全部 ' + count + ' 个顺阶和弦的类型正确', badType, []);
+      check(G, '罗马数字全部正确', badRoman, []);
+      check(G, '和弦根音就是音阶第几级的音（按调拼写）', badRoot, []);
+      check(G, '组成音全部在音阶里，拼写一致', badNotes, []);
+    });
+
     // ---------- 全面检查：每根弦每一品 ----------
     G = '全面检查：指板每个位置';
     safe(G, '逐品', function () {

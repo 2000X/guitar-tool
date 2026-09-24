@@ -106,12 +106,13 @@
 
   // ---------------- 音阶 ----------------
   // roles 可以单独指定某个音级的角色（如布鲁斯的 ♭5 是“蓝调音”，不算五音）
+  // parent 是“母音阶”：五声、布鲁斯不是七声音阶，顺阶和弦按母音阶来算
   var SCALES = [
     { id: 'major',            name: '大调',     degrees: ['1', '2', '3', '4', '5', '6', '7'] },
     { id: 'natural-minor',    name: '自然小调', degrees: ['1', '2', '♭3', '4', '5', '♭6', '♭7'] },
-    { id: 'major-pentatonic', name: '大调五声', degrees: ['1', '2', '3', '5', '6'] },
-    { id: 'minor-pentatonic', name: '小调五声', degrees: ['1', '♭3', '4', '5', '♭7'] },
-    { id: 'blues',            name: '布鲁斯',   degrees: ['1', '♭3', '4', '♭5', '5', '♭7'], roles: { '♭5': 'other' } }
+    { id: 'major-pentatonic', name: '大调五声', degrees: ['1', '2', '3', '5', '6'], parent: 'major' },
+    { id: 'minor-pentatonic', name: '小调五声', degrees: ['1', '♭3', '4', '5', '♭7'], parent: 'natural-minor' },
+    { id: 'blues',            name: '布鲁斯',   degrees: ['1', '♭3', '4', '♭5', '5', '♭7'], roles: { '♭5': 'other' }, parent: 'natural-minor' }
   ];
 
   // 可选的根音（17 种写法）
@@ -183,6 +184,73 @@
     return ALTER_SYMBOL[alter] + number;
   }
 
+  // ---------------- 顺阶和弦 ----------------
+  // 在七声音阶上，从每一级开始“隔一个音取一个音”（1-3-5，七和弦再加 7），得到的就是顺阶和弦。
+  // 五声、布鲁斯没法这样叠，改用它们的母音阶（parent）来算。
+  // 和弦类型不是写死的，而是由叠出来的音算出来的——以后加和声小调等音阶，可以自动得到它的顺阶和弦。
+  var ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+  // 罗马数字：大写 = 三音是大三度，小写 = 小三度；后缀表示和弦类型（小写 + 7 就是小七和弦，如 ii7）
+  var ROMAN_SUFFIX = { maj: '', m: '', dim: '°', aug: '+', maj7: 'maj7', m7: '7', '7': '7', m7b5: 'ø7', dim7: '°7' };
+
+  // 算顺阶和弦用哪个七声音阶；没选音阶或无法计算时返回 null
+  function diatonicBase(scaleId) {
+    if (!scaleId || scaleId === 'none') return null;
+    var sc = getScale(scaleId);
+    if (sc.parent) return sc.parent;
+    return sc.degrees.length === 7 ? sc.id : null;
+  }
+
+  // 按音级组成找和弦类型（找不到返回 null）
+  function chordByDegrees(degrees) {
+    var key = degrees.join(',');
+    for (var i = 0; i < CHORDS.length; i++) if (CHORDS[i].degrees.join(',') === key) return CHORDS[i];
+    return null;
+  }
+
+  // 某个调的 7 个顺阶和弦。size：3 = 三和弦，4 = 七和弦
+  // 每项：step 第几级、numeral 罗马数字（如 ii）、roman 带后缀（如 ii7）、root 和弦根音（按调拼写）、
+  //       chord 和弦类型 id、symbol 和弦写法（如 Dm7）、notes 组成音
+  function diatonicChords(rootName, scaleId, size) {
+    var baseId = diatonicBase(scaleId);
+    if (!baseId) return [];
+    var n = size === 4 ? 4 : 3;
+    var notes = scaleNotes(rootName, baseId);
+    return notes.map(function (bn, i) {
+      var tones = [];
+      for (var k = 0; k < n; k++) tones.push(notes[(i + 2 * k) % notes.length]);
+      var degs = tones.map(function (t) { return degreeBetween(bn.name, t.name); });
+      var c = chordByDegrees(degs);
+      if (!c) throw new Error(rootName + ' ' + scaleId + ' 第 ' + (i + 1) + ' 级叠出的和弦（' + degs.join(' ') + '）还不在和弦库里');
+      var numeral = degs[1] === '♭3' ? ROMAN[i].toLowerCase() : ROMAN[i];
+      return { step: i + 1, numeral: numeral, roman: numeral + ROMAN_SUFFIX[c.id], root: bn.name, pc: bn.pc,
+        chord: c.id, symbol: bn.name + c.symbol, notes: tones.map(function (t) { return t.name; }) };
+    });
+  }
+
+  // 当前和弦是不是这个调的顺阶和弦：按音高比（C♯ 和 D♭ 算同一个），三和弦、七和弦都找
+  // 返回 { size: 3 或 4, item: diatonicChords 里的那一项 }，不是就返回 null
+  function diatonicMatch(rootName, scaleId, chordRoot, chordId) {
+    if (!chordId || chordId === 'none' || !diatonicBase(scaleId)) return null;
+    var pc = parseNote(chordRoot).pc, sizes = [3, 4];
+    for (var s = 0; s < sizes.length; s++) {
+      var list = diatonicChords(rootName, scaleId, sizes[s]);
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].pc === pc && list[i].chord === chordId) return { size: sizes[s], item: list[i] };
+      }
+    }
+    return null;
+  }
+
+  // 把理论写法（E♯、F𝄪、C♭、B𝄫……）换成 17 个常用写法之一：有本位音用本位音，否则升号写法换升号、降号写法换降号
+  function simplifyNote(name) {
+    var n = parseNote(name);
+    if (ROOTS.indexOf(n.name) >= 0) return n.name;
+    var same = ROOTS.filter(function (r) { return parseNote(r).pc === n.pc; });
+    var natural = same.filter(function (r) { return r.length === 1; })[0];
+    if (natural) return natural;
+    return same.filter(function (r) { return n.alter > 0 ? r.indexOf('♯') > 0 : r.indexOf('♭') > 0; })[0] || same[0];
+  }
+
   // ---------------- 叠加：音阶 + 和弦 ----------------
   // 返回 { 音高(0～11): 该音在指板上怎么显示 }，没有的音高就不显示
   //   kind: 'scale'（只有音阶）/ 'chord'（和弦内音）/ 'muted'（叠加时的其他音阶音，淡色）
@@ -237,6 +305,11 @@
     chordSymbol: chordSymbol,
     chordNotes: chordNotes,
     degreeBetween: degreeBetween,
+    diatonicBase: diatonicBase,
+    chordByDegrees: chordByDegrees,
+    diatonicChords: diatonicChords,
+    diatonicMatch: diatonicMatch,
+    simplifyNote: simplifyNote,
     combine: combine
   };
 
