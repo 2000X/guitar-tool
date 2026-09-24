@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>自检</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .summary { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 22px; }
+    .chip { padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); font-size: 14px; }
+    .chip b { font-variant-numeric: tabular-nums; }
+    .verdict { font-size: 18px; font-weight: 650; margin: 0 0 12px; }
+    .verdict.ok { color: var(--pass); } .verdict.bad { color: var(--fail); }
+    section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin-bottom: 14px; }
+    section h2 { font-size: 15px; margin: 0 0 8px; }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li { padding: 4px 0; font-size: 14px; display: flex; gap: 10px; }
+    li .m { width: 1.2em; text-align: center; font-weight: 700; flex: none; }
+    li.pass .m { color: var(--pass); } li.fail .m { color: var(--fail); }
+    li.todo { color: var(--todo); } li.todo .m { color: var(--todo); }
+    li .detail { color: var(--fail); font-size: 13px; display: block; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>自检</h1>
+      <p class="sub">乐理检查项与命令行测试（tests/run.js）完全相同。✓ 通过 · ✗ 失败 · ○ 待实现</p>
+    </header>
+    <p id="verdict" class="verdict"></p>
+    <div id="summary" class="summary"></div>
+    <div id="groups"></div>
+  </div>
+  <script src="js/theory.js"></script>
+  <script src="tests/cases.js"></script>
+  <script>
+    (function () {
+      var results = TheoryTests.runAll(Theory);
+      var s = TheoryTests.summarize(results);
+      var v = document.getElementById('verdict');
+      v.textContent = s.fail === 0 ? '全部通过（已实现的 ' + s.pass + ' 项）' : '有 ' + s.fail + ' 项失败';
+      v.className = 'verdict ' + (s.fail === 0 ? 'ok' : 'bad');
+      document.getElementById('summary').innerHTML =
+        '<span class="chip">合计 <b>' + s.total + '</b></span>' +
+        '<span class="chip">通过 <b>' + s.pass + '</b></span>' +
+        '<span class="chip">失败 <b>' + s.fail + '</b></span>' +
+        '<span class="chip">待实现 <b>' + s.todo + '</b></span>';
+      var box = document.getElementById('groups'), sec = null, ul = null, last = '';
+      results.forEach(function (r) {
+        if (r.group !== last) {
+          sec = document.createElement('section');
+          var h = document.createElement('h2'); h.textContent = r.group; sec.appendChild(h);
+          ul = document.createElement('ul'); sec.appendChild(ul); box.appendChild(sec); last = r.group;
+        }
+        var li = document.createElement('li'); li.className = r.status;
+        var m = document.createElement('span'); m.className = 'm';
+        m.textContent = { pass: '✓', fail: '✗', todo: '○' }[r.status];
+        var t = document.createElement('span'); t.textContent = r.name;
+        if (r.status === 'fail') {
+          var d = document.createElement('span'); d.className = 'detail';
+          d.textContent = '实际：' + r.actual + '　应为：' + r.expected; t.appendChild(d);
+        }
+        li.appendChild(m); li.appendChild(t); ul.appendChild(li);
+      });
+      document.body.setAttribute('data-summary', JSON.stringify(s));
+    })();
+  </script>
+</body>
+</html>

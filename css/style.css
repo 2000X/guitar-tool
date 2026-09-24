@@ -1,0 +1,73 @@
+/* 颜色都集中定义在这里，浅色/深色模式各一套 */
+:root {
+  color-scheme: light dark;
+  --bg: #f6f5f2;
+  --panel: #ffffff;
+  --text: #1f2328;
+  --muted: #6b6f76;
+  --line: #e2dfd8;
+  --board: #ede6d9;
+  --board-edge: #d8cfbf;
+  --fret: #a39c92;
+  --nut: #4a4540;
+  --string: #7b746b;
+  --inlay: #d3c8b5;
+  --hover: rgba(0, 0, 0, 0.07);
+  --pass: #1a7f37;
+  --fail: #cf222e;
+  --todo: #8c959f;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171a;
+    --panel: #1d2024;
+    --text: #e7e7e7;
+    --muted: #9aa0a8;
+    --line: #2d3137;
+    --board: #22252a;
+    --board-edge: #30343a;
+    --fret: #4f555e;
+    --nut: #cfd3d8;
+    --string: #8d949d;
+    --inlay: #353a42;
+    --hover: rgba(255, 255, 255, 0.09);
+    --pass: #4ac26b;
+    --fail: #ff7b72;
+    --todo: #6e7681;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  line-height: 1.5;
+}
+.page { max-width: 1320px; margin: 0 auto; padding: 28px 16px 40px; }
+header h1 { font-size: 22px; margin: 0 0 2px; font-weight: 650; letter-spacing: 0.02em; }
+header .sub { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
+
+.board-wrap {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 8px;
+  overflow-x: auto;
+}
+#fretboard { display: block; width: 100%; min-width: 960px; height: auto; }
+
+/* 指板各部分 */
+.board { fill: var(--board); stroke: var(--board-edge); stroke-width: 1; }
+.fret { stroke: var(--fret); stroke-width: 2; }
+.nut { fill: var(--nut); }
+.string { stroke: var(--string); stroke-linecap: round; }
+.inlay { fill: var(--inlay); }
+.string-label, .fret-num { fill: var(--muted); font-size: 13px; font-family: inherit; }
+.string-label { font-weight: 600; }
+.fret-num.marked { fill: var(--text); font-weight: 600; }
+
+/* 每个位置的占位点：现在是透明的，鼠标移上去会淡淡亮起 */
+.pos .hit { fill: transparent; transition: fill 0.12s; }
+.pos:hover .hit { fill: var(--hover); }
