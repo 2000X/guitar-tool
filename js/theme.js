@@ -30,6 +30,15 @@
       { key: 'inlay',      label: '品位点',       light: '#d3c8b5', dark: '#353a42' },
       { key: 'hover',      label: '鼠标悬停高亮（半透明显示）', light: '#000000', dark: '#ffffff' }
     ]},
+    { name: '音级颜色（指板上的圆点）', items: [
+      { key: 'deg-root',     label: '根音',               light: '#d9443f', dark: '#e5534b' },
+      { key: 'deg-third',    label: '三音',               light: '#d9730d', dark: '#e8912d' },
+      { key: 'deg-fifth',    label: '五音',               light: '#2f6fdb', dark: '#4c8dff' },
+      { key: 'deg-seventh',  label: '七音',               light: '#8250df', dark: '#a371f7' },
+      { key: 'deg-other',    label: '其他音阶音',         light: '#8b929a', dark: '#5c636c' },
+      { key: 'dot-text',     label: '彩色圆点上的文字',   light: '#ffffff', dark: '#ffffff' },
+      { key: 'dot-outline',  label: '圆点描边（与指板分隔）', light: '#ffffff', dark: '#1d2024' }
+    ]},
     { name: '自检页', items: [
       { key: 'pass', label: '通过 ✓',   light: '#1a7f37', dark: '#4ac26b' },
       { key: 'fail', label: '失败 ✗',   light: '#cf222e', dark: '#ff7b72' },

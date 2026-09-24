@@ -87,3 +87,56 @@ header .sub { margin: 0; color: var(--muted); font-size: 13px; }
   color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px;
 }
 .cp-export[hidden] { display: none; }
+
+/* ---------- 第 2 步：选择栏、圆点、图例 ---------- */
+.controls {
+  display: flex; align-items: center; gap: 14px 20px; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 16px; margin-bottom: 12px;
+}
+.field { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.field select {
+  font: inherit; font-size: 14px; color: var(--text); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; min-width: 84px;
+}
+
+/* 指板上的圆点 */
+.dot circle { stroke: var(--dot-outline); stroke-width: 2; }
+.dot text {
+  fill: var(--dot-text); font-size: 13px; font-weight: 650; font-family: inherit;
+  pointer-events: none;
+}
+.dot.small text { font-size: 11.5px; }
+.role-root circle    { fill: var(--deg-root); }
+.role-third circle   { fill: var(--deg-third); }
+.role-fifth circle   { fill: var(--deg-fifth); }
+.role-seventh circle { fill: var(--deg-seventh); }
+.role-other circle   { fill: var(--deg-other); }
+
+/* 图例 */
+.legend {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap;
+  margin-top: 12px; padding: 10px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+}
+.legend[hidden] { display: none; }
+.lg-notes { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 14px; }
+.lg-title { font-weight: 650; margin-right: 6px; }
+.lg-note { display: inline-flex; flex-direction: column; align-items: center; min-width: 34px; }
+.lg-note b {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; padding: 0 5px;
+  border-radius: 15px; color: var(--dot-text); font-size: 13px;
+}
+.lg-note small { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+.lg-note.role-root b    { background: var(--deg-root); }
+.lg-note.role-third b   { background: var(--deg-third); }
+.lg-note.role-fifth b   { background: var(--deg-fifth); }
+.lg-note.role-seventh b { background: var(--deg-seventh); }
+.lg-note.role-other b   { background: var(--deg-other); }
+.lg-keys { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.lg-key { display: inline-flex; align-items: center; gap: 5px; }
+.lg-key i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.lg-key.role-root i    { background: var(--deg-root); }
+.lg-key.role-third i   { background: var(--deg-third); }
+.lg-key.role-fifth i   { background: var(--deg-fifth); }
+.lg-key.role-seventh i { background: var(--deg-seventh); }
+.lg-key.role-other i   { background: var(--deg-other); }

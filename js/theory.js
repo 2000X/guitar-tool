@@ -60,6 +60,87 @@
     return mod12(midiAt(stringNo, fret, tuning));
   }
 
+
+  // ---------------- 音级、拼写、音程 ----------------
+
+  // 大调里各级相对根音的半音数：1 级 0，2 级 2，3 级 4……（音级的“基准”）
+  var MAJOR_SEMITONES = { 1: 0, 2: 2, 3: 4, 4: 5, 5: 7, 6: 9, 7: 11 };
+  var ALTER_SYMBOL = { '-2': '𝄫', '-1': '♭', '0': '', '1': '♯', '2': '𝄪' };
+
+  // 解析音级写法：'1'、'♭3'、'♯5'、'𝄫7'（也接受 b3、#5、bb7）
+  function parseDegree(text) {
+    var m = /^(𝄫|♭♭|bb|♭|b|♯|#|𝄪|##|x)?([1-7])$/.exec(String(text).trim());
+    if (!m) throw new Error('无法识别的音级：' + text);
+    var acc = m[1] || '';
+    var alter = { '': 0, '♭': -1, 'b': -1, '𝄫': -2, '♭♭': -2, 'bb': -2, '♯': 1, '#': 1, '𝄪': 2, '##': 2, 'x': 2 }[acc];
+    return { number: +m[2], alter: alter, text: ALTER_SYMBOL[alter] + m[2] };
+  }
+
+  // 按“根音字母 + 音级”严格拼写：例如 F 的 4 级 → 字母 B，比 B 低半音 → B♭
+  function spellDegree(rootName, degreeText) {
+    var root = parseNote(rootName), d = parseDegree(degreeText);
+    var letter = LETTERS[(LETTERS.indexOf(root.letter) + d.number - 1) % 7];
+    var pc = mod12(root.pc + MAJOR_SEMITONES[d.number] + d.alter);
+    var alter = mod12(pc - LETTER_PC[letter] + 6) - 6; // 化到 -6～5 之间
+    if (alter < -2 || alter > 2) throw new Error(rootName + ' 的 ' + degreeText + ' 需要三个升降号，无法拼写');
+    return { letter: letter, alter: alter, pc: pc, name: letter + ALTER_SYMBOL[alter] };
+  }
+
+  // 音程名：1 级显示 R（根音），其余如 m3、M3、P5、d5、A5
+  function intervalName(degreeText) {
+    var d = parseDegree(degreeText);
+    if (d.number === 1 && d.alter === 0) return 'R';
+    var perfect = d.number === 1 || d.number === 4 || d.number === 5;
+    var q = perfect
+      ? { '-2': 'dd', '-1': 'd', '0': 'P', '1': 'A', '2': 'AA' }[d.alter]
+      : { '-2': 'd', '-1': 'm', '0': 'M', '1': 'A', '2': 'AA' }[d.alter];
+    return q + d.number;
+  }
+
+  // 音级在和弦骨架里的角色，决定颜色：根音 / 三音 / 五音 / 七音 / 其他
+  function roleOf(degreeText) {
+    var n = parseDegree(degreeText).number;
+    return { 1: 'root', 3: 'third', 5: 'fifth', 7: 'seventh' }[n] || 'other';
+  }
+
+  // ---------------- 音阶 ----------------
+  // roles 可以单独指定某个音级的角色（如布鲁斯的 ♭5 是“蓝调音”，不算五音）
+  var SCALES = [
+    { id: 'major',            name: '大调',     degrees: ['1', '2', '3', '4', '5', '6', '7'] },
+    { id: 'natural-minor',    name: '自然小调', degrees: ['1', '2', '♭3', '4', '5', '♭6', '♭7'] },
+    { id: 'major-pentatonic', name: '大调五声', degrees: ['1', '2', '3', '5', '6'] },
+    { id: 'minor-pentatonic', name: '小调五声', degrees: ['1', '♭3', '4', '5', '♭7'] },
+    { id: 'blues',            name: '布鲁斯',   degrees: ['1', '♭3', '4', '♭5', '5', '♭7'], roles: { '♭5': 'other' } }
+  ];
+
+  // 可选的根音（17 种写法）
+  var ROOTS = ['C', 'C♯', 'D♭', 'D', 'D♯', 'E♭', 'E', 'F', 'F♯', 'G♭', 'G', 'G♯', 'A♭', 'A', 'A♯', 'B♭', 'B'];
+
+  function getScale(id) {
+    var sc = SCALES.filter(function (x) { return x.id === id; })[0];
+    if (!sc) throw new Error('没有这个音阶：' + id);
+    return sc;
+  }
+
+  // 某个根音上的音阶：每个音的音级、音名、音高、音程名、角色
+  function scaleNotes(rootName, scaleId) {
+    var sc = getScale(scaleId);
+    return sc.degrees.map(function (deg) {
+      var n = spellDegree(rootName, deg);
+      return {
+        degree: parseDegree(deg).text, name: n.name, pc: n.pc,
+        interval: intervalName(deg),
+        role: (sc.roles && sc.roles[deg]) || roleOf(deg)
+      };
+    });
+  }
+
+  // 在一组音里找某个音高（找不到返回 null）
+  function findByPc(notes, pc) {
+    for (var i = 0; i < notes.length; i++) if (notes[i].pc === pc) return notes[i];
+    return null;
+  }
+
   var Theory = {
     LETTERS: LETTERS,
     LETTER_PC: LETTER_PC,
@@ -70,7 +151,16 @@
     parseNote: parseNote,
     openString: openString,
     midiAt: midiAt,
-    pcAt: pcAt
+    pcAt: pcAt,
+    parseDegree: parseDegree,
+    spellDegree: spellDegree,
+    intervalName: intervalName,
+    roleOf: roleOf,
+    SCALES: SCALES,
+    ROOTS: ROOTS,
+    getScale: getScale,
+    scaleNotes: scaleNotes,
+    findByPc: findByPc
   };
 
   root.Theory = Theory;

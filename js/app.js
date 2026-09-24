@@ -108,5 +108,92 @@
     });
   }
 
+  // ---------------- 第 2 步：音阶圆点 ----------------
+
+  var ROLE_NAMES = { root: '根音', third: '三音', fifth: '五音', seventh: '七音', other: '其他' };
+  var KEY_VIEW = 'guitarTool.viewState';
+  var DEFAULT_STATE = { root: 'C', scale: 'major', label: 'name' };
+
+  // 读取上次的设置（读不到或不合法就用默认值）
+  function loadState() {
+    var st = {};
+    try { st = JSON.parse(window.localStorage.getItem(KEY_VIEW) || '{}') || {}; } catch (e) { st = {}; }
+    var out = {};
+    out.root = T.ROOTS.indexOf(st.root) >= 0 ? st.root : DEFAULT_STATE.root;
+    out.scale = st.scale === 'none' || T.SCALES.some(function (x) { return x.id === st.scale; }) ? st.scale : DEFAULT_STATE.scale;
+    out.label = ['name', 'degree', 'interval'].indexOf(st.label) >= 0 ? st.label : DEFAULT_STATE.label;
+    return out;
+  }
+  function saveState() {
+    try { window.localStorage.setItem(KEY_VIEW, JSON.stringify(state)); } catch (e) {}
+  }
+  var state = loadState();
+
+  function labelOf(note) {
+    return state.label === 'degree' ? note.degree : state.label === 'interval' ? note.interval : note.name;
+  }
+
+  function renderDots() {
+    var notes = state.scale === 'none' ? [] : T.scaleNotes(state.root, state.scale);
+    document.querySelectorAll('#fretboard .pos').forEach(function (g) {
+      var old = g.querySelector('.dot');
+      if (old) g.removeChild(old);
+      var note = T.findByPc(notes, +g.getAttribute('data-pc'));
+      if (!note) return;
+      var text = labelOf(note);
+      var dot = el('g', { class: 'dot role-' + note.role + (text.length > 2 ? ' small' : ''),
+        'data-name': note.name, 'data-degree': note.degree, 'data-interval': note.interval, 'data-role': note.role }, g);
+      el('circle', { r: 15 }, dot);
+      el('text', { 'text-anchor': 'middle', 'dominant-baseline': 'central', y: 0.5 }, dot).textContent = text;
+    });
+    renderLegend(notes);
+  }
+
+  function renderLegend(notes) {
+    var box = document.getElementById('legend');
+    if (!notes.length) { box.hidden = true; box.innerHTML = ''; return; }
+    box.hidden = false;
+    var sc = T.getScale(state.scale);
+    var html = '<div class="lg-notes"><span class="lg-title" id="lg-title">' + state.root + ' ' + sc.name + '</span>';
+    notes.forEach(function (n) {
+      html += '<span class="lg-note role-' + n.role + '" title="' + ROLE_NAMES[n.role] + '"><b>' + n.name + '</b><small>'
+        + n.degree + ' · ' + n.interval + '</small></span>';
+    });
+    html += '</div><div class="lg-keys">';
+    ['root', 'third', 'fifth', 'seventh', 'other'].forEach(function (r) {
+      html += '<span class="lg-key role-' + r + '"><i></i>' + ROLE_NAMES[r] + '</span>';
+    });
+    box.innerHTML = html + '</div>';
+  }
+
+  function setupControls() {
+    var rootSel = document.getElementById('root-select');
+    var scaleSel = document.getElementById('scale-select');
+    T.ROOTS.forEach(function (r) {
+      var o = document.createElement('option'); o.value = r; o.textContent = r; rootSel.appendChild(o);
+    });
+    var none = document.createElement('option'); none.value = 'none'; none.textContent = '（不显示）'; scaleSel.appendChild(none);
+    T.SCALES.forEach(function (sc) {
+      var o = document.createElement('option'); o.value = sc.id; o.textContent = sc.name; scaleSel.appendChild(o);
+    });
+    rootSel.value = state.root;
+    scaleSel.value = state.scale;
+    rootSel.addEventListener('change', function () { state.root = rootSel.value; saveState(); renderDots(); });
+    scaleSel.addEventListener('change', function () { state.scale = scaleSel.value; saveState(); renderDots(); });
+
+    var seg = document.getElementById('label-mode');
+    function syncSeg() {
+      seg.querySelectorAll('button').forEach(function (b) {
+        b.setAttribute('aria-checked', b.getAttribute('data-label') === state.label ? 'true' : 'false');
+      });
+    }
+    seg.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () { state.label = b.getAttribute('data-label'); saveState(); syncSeg(); renderDots(); });
+    });
+    syncSeg();
+  }
+
   draw();
+  setupControls();
+  renderDots();
 })();

@@ -150,6 +150,109 @@ const def = (scheme, key) => themeItems.find(i => i.key === key)[scheme];
     await context.close();
   }
 
+  // ---------- 第 2 步：音阶圆点 ----------
+  {
+    const { context, page, errors } = await openPage('index.html', { colorScheme: 'light', viewport: { width: 1400, height: 760 } });
+    // 独立写的标准：空弦音高 + 品数（不借用 theory.js）
+    const OPEN = { 1: 4, 2: 11, 3: 7, 4: 2, 5: 9, 6: 4 };
+    const expectCount = pcs => { let c = 0; for (let s = 1; s <= 6; s++) for (let f = 0; f <= 15; f++) if (pcs.includes((OPEN[s] + f) % 12)) c++; return c; };
+    const dots = () => page.evaluate(() => [...document.querySelectorAll('.pos')].filter(g => g.querySelector('.dot')).map(g => {
+      const d = g.querySelector('.dot');
+      return { s: +g.dataset.string, f: +g.dataset.fret, text: d.querySelector('text').textContent, role: d.dataset.role,
+        fill: getComputedStyle(d.querySelector('circle')).fill };
+    }));
+    const at = (list, s, f) => list.find(d => d.s === s && d.f === f);
+    const pick = async (sel, v) => { await page.selectOption(sel, v); };
+
+    // 默认：C 大调，显示音名
+    check('默认根音 C、音阶大调、显示音名',
+      await page.inputValue('#root-select') === 'C' && await page.inputValue('#scale-select') === 'major'
+      && await page.getAttribute('#label-mode [aria-checked="true"]', 'data-label') === 'name');
+    let d = await dots();
+    check('C 大调：圆点数量正确（只标音阶音）', d.length === expectCount([0, 2, 4, 5, 7, 9, 11]), d.length);
+    check('标准答案 #1：5 弦 3 品显示 C，红色根音',
+      at(d, 5, 3)?.text === 'C' && at(d, 5, 3)?.role === 'root' && at(d, 5, 3)?.fill === hexToRgb(def('light', 'deg-root')), at(d, 5, 3));
+    check('C 大调：5 弦 4 品（C♯）没有圆点', !at(d, 5, 4));
+    check('C 大调：三音 E（1 弦 0 品）是橙色', at(d, 1, 0)?.fill === hexToRgb(def('light', 'deg-third')), at(d, 1, 0));
+    check('C 大调：五音 G（3 弦 0 品）是蓝色', at(d, 3, 0)?.fill === hexToRgb(def('light', 'deg-fifth')), at(d, 3, 0));
+    check('C 大调：七音 B（2 弦 0 品）是紫色', at(d, 2, 0)?.fill === hexToRgb(def('light', 'deg-seventh')), at(d, 2, 0));
+    check('C 大调：其他音 D（4 弦 0 品）是灰色', at(d, 4, 0)?.fill === hexToRgb(def('light', 'deg-other')), at(d, 4, 0));
+    await page.screenshot({ path: path.join(outDir, 'step2_C_major_light.png') });
+
+    // F 大调
+    await pick('#root-select', 'F');
+    d = await dots();
+    check('标准答案 #2：F 大调 3 弦 3 品显示 B♭', at(d, 3, 3)?.text === 'B♭', at(d, 3, 3));
+    check('F 大调：指板上没有出现 A♯', !d.some(x => x.text === 'A♯'));
+    check('F 大调：图例显示 F G A B♭ C D E',
+      (await page.$$eval('.lg-note b', bs => bs.map(b => b.textContent).join(' '))) === 'F G A B♭ C D E');
+    await page.click('#label-mode [data-label="interval"]');
+    await page.screenshot({ path: path.join(outDir, 'step2_F_major_interval_light.png') });
+
+    // E 大调
+    await page.click('#label-mode [data-label="name"]');
+    await pick('#root-select', 'E');
+    check('标准答案 #3：E 大调图例 E F♯ G♯ A B C♯ D♯',
+      (await page.$$eval('.lg-note b', bs => bs.map(b => b.textContent).join(' '))) === 'E F♯ G♯ A B C♯ D♯');
+
+    // A 小调五声
+    await pick('#root-select', 'A');
+    await pick('#scale-select', 'minor-pentatonic');
+    d = await dots();
+    const box = d.filter(x => x.f >= 5 && x.f <= 8).map(x => x.s + '-' + x.f).sort();
+    check('标准答案 #4：A 小调五声 5～8 品的 12 个位置', JSON.stringify(box) === JSON.stringify(
+      ['1-5', '1-8', '2-5', '2-8', '3-5', '3-7', '4-5', '4-7', '5-5', '5-7', '6-5', '6-8']), box);
+    check('A 小调五声：图例标题', (await page.textContent('#lg-title')) === 'A 小调五声');
+    await page.click('#label-mode [data-label="degree"]');
+    d = await dots();
+    check('标准答案 #5：切到音级，6 弦 5 品显示 1、8 品显示 ♭3', at(d, 6, 5)?.text === '1' && at(d, 6, 8)?.text === '♭3', [at(d, 6, 5), at(d, 6, 8)]);
+    const degSet = [...new Set(d.map(x => x.text))].sort();
+    check('A 小调五声：音级只出现 1 ♭3 4 5 ♭7', JSON.stringify(degSet) === JSON.stringify(['1', '4', '5', '♭3', '♭7'].sort()), degSet);
+    await page.click('#label-mode [data-label="interval"]');
+    d = await dots();
+    check('切到音程：根音显示 R，C 显示 m3', at(d, 6, 5)?.text === 'R' && at(d, 6, 8)?.text === 'm3', [at(d, 6, 5), at(d, 6, 8)]);
+
+    // A 布鲁斯
+    await page.click('#label-mode [data-label="name"]');
+    await pick('#scale-select', 'blues');
+    d = await dots();
+    check('标准答案 #6：A 布鲁斯图例 A C D E♭ E G',
+      (await page.$$eval('.lg-note b', bs => bs.map(b => b.textContent).join(' '))) === 'A C D E♭ E G');
+    check('A 布鲁斯：5 弦 6 品是 E♭（灰色蓝调音）', at(d, 5, 6)?.text === 'E♭' && at(d, 5, 6)?.role === 'other', at(d, 5, 6));
+    check('A 布鲁斯：没有出现 D♯', !d.some(x => x.text === 'D♯'));
+
+    // 不显示
+    await pick('#scale-select', 'none');
+    check('选“不显示”→ 没有圆点、图例隐藏', (await dots()).length === 0 && await page.isHidden('#legend'));
+
+    // 记住设置
+    await pick('#scale-select', 'minor-pentatonic');
+    await page.click('#label-mode [data-label="degree"]');
+    await page.reload();
+    check('刷新后记住上次的根音、音阶、显示方式',
+      await page.inputValue('#root-select') === 'A' && await page.inputValue('#scale-select') === 'minor-pentatonic'
+      && await page.getAttribute('#label-mode [aria-checked="true"]', 'data-label') === 'degree');
+
+    // 调色面板能调圆点颜色
+    await page.click('#color-btn');
+    await page.$eval('.cp-item[data-key="deg-root"] input[type="color"]', el => {
+      el.focus(); el.value = '#00aa00'; el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    d = await dots();
+    check('调色面板改“根音”颜色 → 根音圆点立刻变色', at(d, 6, 5)?.fill === 'rgb(0, 170, 0)', at(d, 6, 5));
+    await page.click('#cp-reset');
+    check('页面无报错（音阶）', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    const { context, page } = await openPage('index.html', { colorScheme: 'dark', viewport: { width: 1400, height: 760 } });
+    await page.selectOption('#root-select', 'A');
+    await page.selectOption('#scale-select', 'minor-pentatonic');
+    await page.click('#label-mode [data-label="degree"]');
+    await page.screenshot({ path: path.join(outDir, 'step2_A_minpent_degree_dark.png') });
+    await context.close();
+  }
+
   // ---------- 自检页 ----------
   {
     const { context, page, errors } = await openPage('自检.html', { viewport: { width: 1000, height: 900 } });
