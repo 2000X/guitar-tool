@@ -101,17 +101,17 @@ header .sub { margin: 0; color: var(--muted); font-size: 13px; }
 }
 
 /* 指板上的圆点 */
-.dot circle { stroke: var(--dot-outline); stroke-width: 2; }
+.dot .body { stroke: var(--dot-outline); stroke-width: 2; }
 .dot text {
   fill: var(--dot-text); font-size: 13px; font-weight: 650; font-family: inherit;
   pointer-events: none;
 }
 .dot.small text { font-size: 11.5px; }
-.role-root circle    { fill: var(--deg-root); }
-.role-third circle   { fill: var(--deg-third); }
-.role-fifth circle   { fill: var(--deg-fifth); }
-.role-seventh circle { fill: var(--deg-seventh); }
-.role-other circle   { fill: var(--deg-other); }
+.role-root .body    { fill: var(--deg-root); }
+.role-third .body   { fill: var(--deg-third); }
+.role-fifth .body   { fill: var(--deg-fifth); }
+.role-seventh .body { fill: var(--deg-seventh); }
+.role-other .body   { fill: var(--deg-other); }
 
 /* 图例 */
 .legend {
@@ -140,3 +140,21 @@ header .sub { margin: 0; color: var(--muted); font-size: 13px; }
 .lg-key.role-fifth i   { background: var(--deg-fifth); }
 .lg-key.role-seventh i { background: var(--deg-seventh); }
 .lg-key.role-other i   { background: var(--deg-other); }
+
+/* ---------- 第 3 步：和弦叠加 ---------- */
+.ctl-group { display: flex; align-items: center; gap: 10px; padding-right: 20px; border-right: 1px solid var(--line); }
+.ctl-title { font-size: 13px; font-weight: 650; color: var(--text); }
+.dot.kind-muted .body { fill: var(--scale-muted); }
+.dot.kind-muted text { fill: var(--scale-muted-text); font-weight: 500; font-size: 12px; }
+.dot.kind-muted.small text { font-size: 10.5px; }
+.ring { fill: none; stroke-width: 2.5; }
+.scale-root-ring { stroke: var(--scale-root-ring); }
+.outside-ring { stroke: var(--outside-mark); stroke-dasharray: 4 3; }
+
+.lg-lines { display: flex; flex-direction: column; gap: 10px; }
+.lg-note.kind-muted b { background: var(--scale-muted); color: var(--scale-muted-text); }
+.lg-note.scale-root b { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--scale-root-ring); }
+.lg-note.outside b { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--outside-mark); }
+.lg-key.kind-muted i { background: var(--scale-muted); }
+.lg-key.scale-root i { background: transparent; border: 2px solid var(--scale-root-ring); }
+.lg-key.outside i { background: transparent; border: 2px dashed var(--outside-mark); }

@@ -39,6 +39,12 @@
       { key: 'dot-text',     label: '彩色圆点上的文字',   light: '#ffffff', dark: '#ffffff' },
       { key: 'dot-outline',  label: '圆点描边（与指板分隔）', light: '#ffffff', dark: '#1d2024' }
     ]},
+    { name: '叠加显示（音阶 + 和弦同时开）', items: [
+      { key: 'scale-muted',      label: '其他音阶音（淡色圆点）', light: '#d3cbbd', dark: '#3a3f46' },
+      { key: 'scale-muted-text', label: '淡色圆点上的文字',       light: '#6b645b', dark: '#a3a9b1' },
+      { key: 'scale-root-ring',  label: '音阶根音描边（实线圈）', light: '#1f2328', dark: '#e7e7e7' },
+      { key: 'outside-mark',     label: '调外音标记（虚线圈）',   light: '#bf3989', dark: '#f778ba' }
+    ]},
     { name: '自检页', items: [
       { key: 'pass', label: '通过 ✓',   light: '#1a7f37', dark: '#4ac26b' },
       { key: 'fail', label: '失败 ✗',   light: '#cf222e', dark: '#ff7b72' },

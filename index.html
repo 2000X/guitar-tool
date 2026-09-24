@@ -12,7 +12,7 @@
     <header>
       <div>
         <h1>吉他指板</h1>
-        <p class="sub">v0.1 开发中 · 第 2 步：音阶</p>
+        <p class="sub">v0.1 开发中 · 第 3 步：和弦</p>
       </div>
       <div class="toolbar">
         <div id="mode-switch"></div>
@@ -21,8 +21,16 @@
     </header>
     <main>
       <div class="controls" id="controls">
-        <label class="field">根音 <select id="root-select" aria-label="根音"></select></label>
-        <label class="field">音阶 <select id="scale-select" aria-label="音阶"></select></label>
+        <div class="ctl-group">
+          <span class="ctl-title">音阶</span>
+          <label class="field">根音 <select id="root-select" aria-label="音阶根音"></select></label>
+          <label class="field">类型 <select id="scale-select" aria-label="音阶类型"></select></label>
+        </div>
+        <div class="ctl-group">
+          <span class="ctl-title">和弦</span>
+          <label class="field">根音 <select id="chord-root-select" aria-label="和弦根音"></select></label>
+          <label class="field">类型 <select id="chord-select" aria-label="和弦类型"></select></label>
+        </div>
         <div class="field">显示
           <div class="segmented" id="label-mode" role="radiogroup" aria-label="圆点上显示什么">
             <button type="button" role="radio" data-label="name">音名</button>

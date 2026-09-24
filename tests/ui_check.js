@@ -159,7 +159,7 @@ const def = (scheme, key) => themeItems.find(i => i.key === key)[scheme];
     const dots = () => page.evaluate(() => [...document.querySelectorAll('.pos')].filter(g => g.querySelector('.dot')).map(g => {
       const d = g.querySelector('.dot');
       return { s: +g.dataset.string, f: +g.dataset.fret, text: d.querySelector('text').textContent, role: d.dataset.role,
-        fill: getComputedStyle(d.querySelector('circle')).fill };
+        fill: getComputedStyle(d.querySelector('.body')).fill };
     }));
     const at = (list, s, f) => list.find(d => d.s === s && d.f === f);
     const pick = async (sel, v) => { await page.selectOption(sel, v); };
@@ -250,6 +250,115 @@ const def = (scheme, key) => themeItems.find(i => i.key === key)[scheme];
     await page.selectOption('#scale-select', 'minor-pentatonic');
     await page.click('#label-mode [data-label="degree"]');
     await page.screenshot({ path: path.join(outDir, 'step2_A_minpent_degree_dark.png') });
+    await context.close();
+  }
+
+  // ---------- 第 3 步：和弦 + 叠加 ----------
+  {
+    const { context, page, errors } = await openPage('index.html', { colorScheme: 'light', viewport: { width: 1400, height: 820 } });
+    const OPEN = { 1: 4, 2: 11, 3: 7, 4: 2, 5: 9, 6: 4 };
+    const expectCount = pcs => { let c = 0; for (let s = 1; s <= 6; s++) for (let f = 0; f <= 15; f++) if (pcs.includes((OPEN[s] + f) % 12)) c++; return c; };
+    const dots = () => page.evaluate(() => [...document.querySelectorAll('.pos')].filter(g => g.querySelector('.dot')).map(g => {
+      const d = g.querySelector('.dot');
+      return { s: +g.dataset.string, f: +g.dataset.fret, text: d.querySelector('text').textContent, kind: d.dataset.kind,
+        role: d.dataset.role, outside: d.dataset.outside === '1', ring: !!d.querySelector('.scale-root-ring'),
+        dashed: !!d.querySelector('.outside-ring'), fill: getComputedStyle(d.querySelector('.body')).fill,
+        dashStroke: d.querySelector('.outside-ring') ? getComputedStyle(d.querySelector('.outside-ring')).stroke : null };
+    }));
+    const at = (list, s, f) => list.find(d => d.s === s && d.f === f);
+    const chips = sel => page.$$eval(sel + ' .lg-note b', bs => bs.map(b => b.textContent).join(' '));
+
+    check('默认不显示和弦（第 2 步的行为不变）', await page.inputValue('#chord-select') === 'none');
+    check('和弦类型有 9 种 + “不显示”', await page.locator('#chord-select option').count() === 10);
+
+    // 标准答案 #8：C 大调 + G7
+    await page.selectOption('#root-select', 'C');
+    await page.selectOption('#scale-select', 'major');
+    await page.selectOption('#chord-root-select', 'G');
+    await page.selectOption('#chord-select', '7');
+    let d = await dots();
+    check('#8 C 大调 + G7：七个音阶音全部显示', d.length === expectCount([0, 2, 4, 5, 7, 9, 11]), d.length);
+    const chordPcsShown = d.filter(x => x.kind === 'chord').map(x => x.text);
+    check('#8 高亮的只有 G B D F', JSON.stringify([...new Set(chordPcsShown)].sort()) === JSON.stringify(['B', 'D', 'F', 'G']), [...new Set(chordPcsShown)]);
+    check('#8 G（6 弦 3 品）是红色根音', at(d, 6, 3)?.kind === 'chord' && at(d, 6, 3)?.fill === hexToRgb(def('light', 'deg-root')), at(d, 6, 3));
+    check('#8 C（5 弦 3 品）是淡色，并有音阶根音描边',
+      at(d, 5, 3)?.kind === 'muted' && at(d, 5, 3)?.ring && at(d, 5, 3)?.fill === hexToRgb(def('light', 'scale-muted')), at(d, 5, 3));
+    check('#8 A、E 是淡色', at(d, 6, 5)?.kind === 'muted' && at(d, 6, 0)?.kind === 'muted');
+    check('#8 没有调外音', !d.some(x => x.outside));
+    check('#8 图例：G7 = G B D F', (await page.textContent('#lg-chord-title')) === 'G7' && await chips('#lg-chord') === 'G B D F');
+    await page.screenshot({ path: path.join(outDir, 'step3_C_major_G7_light.png') });
+    await page.click('#label-mode [data-label="degree"]');
+    d = await dots();
+    check('#8 音级以和弦根音为准：G=1、B=3、C=4、F=♭7',
+      at(d, 6, 3)?.text === '1' && at(d, 5, 2)?.text === '3' && at(d, 5, 3)?.text === '4' && at(d, 6, 1)?.text === '♭7',
+      [at(d, 6, 3), at(d, 5, 2), at(d, 5, 3), at(d, 6, 1)]);
+    await page.click('#label-mode [data-label="interval"]');
+    d = await dots();
+    check('#8 音程：G=R、B=M3、F=m7、A=M2', at(d, 6, 3)?.text === 'R' && at(d, 5, 2)?.text === 'M3' && at(d, 6, 1)?.text === 'm7' && at(d, 6, 5)?.text === 'M2');
+    await page.click('#label-mode [data-label="degree"]');
+    await page.screenshot({ path: path.join(outDir, 'step3_C_major_G7_degree_light.png') });
+
+    // 标准答案 #9：C 大调 + E7
+    await page.click('#label-mode [data-label="name"]');
+    await page.selectOption('#chord-root-select', 'E');
+    d = await dots();
+    check('#9 C 大调 + E7：G♯（6 弦 4 品）是调外音，有虚线圈',
+      at(d, 6, 4)?.text === 'G♯' && at(d, 6, 4)?.outside && at(d, 6, 4)?.dashed && at(d, 6, 4)?.dashStroke === hexToRgb(def('light', 'outside-mark')), at(d, 6, 4));
+    check('#9 G♯ 是橙色三音', at(d, 6, 4)?.fill === hexToRgb(def('light', 'deg-third')));
+    check('#9 G（6 弦 3 品）是淡色音阶音，不是和弦音', at(d, 6, 3)?.kind === 'muted');
+    check('#9 只有 G♯ 是调外音', d.filter(x => x.outside).every(x => x.text === 'G♯') && d.some(x => x.outside));
+    check('#9 图例：E7 = E G♯ B D', await chips('#lg-chord') === 'E G♯ B D');
+    await page.screenshot({ path: path.join(outDir, 'step3_C_major_E7_light.png') });
+
+    // 只开和弦
+    await page.selectOption('#scale-select', 'none');
+    await page.selectOption('#chord-root-select', 'A');
+    await page.selectOption('#chord-select', 'm7');
+    d = await dots();
+    check('只开和弦 Am7：只标 A C E G，没有淡色音', d.length === expectCount([9, 0, 4, 7]) && d.every(x => x.kind === 'chord'), d.length);
+    check('只开和弦：没有描边和虚线圈', !d.some(x => x.ring || x.dashed));
+    check('只开和弦：图例只有和弦一行', await page.locator('#lg-scale').count() === 0 && await chips('#lg-chord') === 'A C E G');
+
+    // 减七：重降号
+    await page.selectOption('#chord-root-select', 'C');
+    await page.selectOption('#chord-select', 'dim7');
+    check('Cdim7 图例 = C E♭ G♭ B𝄫', await chips('#lg-chord') === 'C E♭ G♭ B𝄫');
+
+    // 两个都关
+    await page.selectOption('#chord-select', 'none');
+    check('音阶、和弦都不显示 → 没有圆点、图例隐藏', (await dots()).length === 0 && await page.isHidden('#legend'));
+
+    // 记住设置
+    await page.selectOption('#scale-select', 'natural-minor');
+    await page.selectOption('#root-select', 'A');
+    await page.selectOption('#chord-root-select', 'E');
+    await page.selectOption('#chord-select', '7');
+    await page.reload();
+    check('刷新后记住音阶和和弦设置',
+      await page.inputValue('#root-select') === 'A' && await page.inputValue('#scale-select') === 'natural-minor'
+      && await page.inputValue('#chord-root-select') === 'E' && await page.inputValue('#chord-select') === '7');
+    d = await dots();
+    check('A 自然小调 + E7：G♯ 是调外音（和声小调的来源）', at(d, 6, 4)?.outside === true);
+
+    // 调色面板能调叠加颜色
+    await page.click('#color-btn');
+    await page.$eval('.cp-item[data-key="scale-muted"] input[type="color"]', el => {
+      el.focus(); el.value = '#123456'; el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    d = await dots();
+    check('调色面板改“其他音阶音”颜色 → 淡色圆点立刻变色', d.some(x => x.kind === 'muted' && x.fill === 'rgb(18, 52, 86)'));
+    await page.click('#cp-reset');
+    check('页面无报错（和弦叠加）', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    const { context, page } = await openPage('index.html', { colorScheme: 'dark', viewport: { width: 1400, height: 820 } });
+    await page.selectOption('#root-select', 'A');
+    await page.selectOption('#scale-select', 'natural-minor');
+    await page.selectOption('#chord-root-select', 'E');
+    await page.selectOption('#chord-select', '7');
+    await page.click('#label-mode [data-label="degree"]');
+    await page.screenshot({ path: path.join(outDir, 'step3_A_minor_E7_degree_dark.png') });
     await context.close();
   }
 

@@ -108,21 +108,24 @@
     });
   }
 
-  // ---------------- 第 2 步：音阶圆点 ----------------
+  // ---------------- 圆点：音阶 + 和弦 ----------------
 
   var ROLE_NAMES = { root: '根音', third: '三音', fifth: '五音', seventh: '七音', other: '其他' };
   var KEY_VIEW = 'guitarTool.viewState';
-  var DEFAULT_STATE = { root: 'C', scale: 'major', label: 'name' };
+  var DEFAULT_STATE = { root: 'C', scale: 'major', chordRoot: 'C', chord: 'none', label: 'name' };
 
   // 读取上次的设置（读不到或不合法就用默认值）
   function loadState() {
     var st = {};
     try { st = JSON.parse(window.localStorage.getItem(KEY_VIEW) || '{}') || {}; } catch (e) { st = {}; }
-    var out = {};
-    out.root = T.ROOTS.indexOf(st.root) >= 0 ? st.root : DEFAULT_STATE.root;
-    out.scale = st.scale === 'none' || T.SCALES.some(function (x) { return x.id === st.scale; }) ? st.scale : DEFAULT_STATE.scale;
-    out.label = ['name', 'degree', 'interval'].indexOf(st.label) >= 0 ? st.label : DEFAULT_STATE.label;
-    return out;
+    var okRoot = function (r) { return T.ROOTS.indexOf(r) >= 0; };
+    return {
+      root: okRoot(st.root) ? st.root : DEFAULT_STATE.root,
+      scale: st.scale === 'none' || T.SCALES.some(function (x) { return x.id === st.scale; }) ? st.scale : DEFAULT_STATE.scale,
+      chordRoot: okRoot(st.chordRoot) ? st.chordRoot : DEFAULT_STATE.chordRoot,
+      chord: st.chord === 'none' || T.CHORDS.some(function (x) { return x.id === st.chord; }) ? st.chord : DEFAULT_STATE.chord,
+      label: ['name', 'degree', 'interval'].indexOf(st.label) >= 0 ? st.label : DEFAULT_STATE.label
+    };
   }
   function saveState() {
     try { window.localStorage.setItem(KEY_VIEW, JSON.stringify(state)); } catch (e) {}
@@ -134,52 +137,86 @@
   }
 
   function renderDots() {
-    var notes = state.scale === 'none' ? [] : T.scaleNotes(state.root, state.scale);
+    var map = T.combine(state.root, state.scale, state.chordRoot, state.chord);
+    var hasChord = state.chord !== 'none';
     document.querySelectorAll('#fretboard .pos').forEach(function (g) {
       var old = g.querySelector('.dot');
       if (old) g.removeChild(old);
-      var note = T.findByPc(notes, +g.getAttribute('data-pc'));
-      if (!note) return;
-      var text = labelOf(note);
-      var dot = el('g', { class: 'dot role-' + note.role + (text.length > 2 ? ' small' : ''),
-        'data-name': note.name, 'data-degree': note.degree, 'data-interval': note.interval, 'data-role': note.role }, g);
-      el('circle', { r: 15 }, dot);
+      var info = map[+g.getAttribute('data-pc')];
+      if (!info) return;
+      var text = labelOf(info);
+      var cls = 'dot kind-' + info.kind + ' role-' + info.role + (text.length > 2 ? ' small' : '');
+      var dot = el('g', { class: cls, 'data-kind': info.kind, 'data-name': info.name, 'data-degree': info.degree,
+        'data-interval': info.interval, 'data-role': info.role,
+        'data-outside': info.outside ? '1' : '0', 'data-scale-root': info.scaleRoot && hasChord ? '1' : '0' }, g);
+      if (info.scaleRoot && hasChord) el('circle', { class: 'ring scale-root-ring', r: 19 }, dot);
+      if (info.outside) el('circle', { class: 'ring outside-ring', r: 19 }, dot);
+      el('circle', { class: 'body', r: info.kind === 'muted' ? 13 : 15 }, dot);
       el('text', { 'text-anchor': 'middle', 'dominant-baseline': 'central', y: 0.5 }, dot).textContent = text;
     });
-    renderLegend(notes);
+    renderLegend(map);
   }
 
-  function renderLegend(notes) {
+  function chip(n, cls) {
+    return '<span class="lg-note ' + cls + '"><b>' + n.name + '</b><small>' + n.degree + ' · ' + n.interval + '</small></span>';
+  }
+
+  function renderLegend(map) {
     var box = document.getElementById('legend');
-    if (!notes.length) { box.hidden = true; box.innerHTML = ''; return; }
+    var hasScale = state.scale !== 'none', hasChord = state.chord !== 'none';
+    if (!hasScale && !hasChord) { box.hidden = true; box.innerHTML = ''; return; }
     box.hidden = false;
-    var sc = T.getScale(state.scale);
-    var html = '<div class="lg-notes"><span class="lg-title" id="lg-title">' + state.root + ' ' + sc.name + '</span>';
-    notes.forEach(function (n) {
-      html += '<span class="lg-note role-' + n.role + '" title="' + ROLE_NAMES[n.role] + '"><b>' + n.name + '</b><small>'
-        + n.degree + ' · ' + n.interval + '</small></span>';
-    });
+    var html = '<div class="lg-lines">';
+    if (hasChord) {
+      var cn = T.chordNotes(state.chordRoot, state.chord);
+      html += '<div class="lg-notes" id="lg-chord"><span class="lg-title" id="lg-chord-title">'
+        + T.chordSymbol(state.chordRoot, state.chord) + '</span>';
+      cn.forEach(function (n) {
+        var out = map[n.pc] && map[n.pc].outside;
+        html += chip(n, 'role-' + n.role + (out ? ' outside' : ''));
+      });
+      html += '</div>';
+    }
+    if (hasScale) {
+      var sc = T.getScale(state.scale);
+      html += '<div class="lg-notes" id="lg-scale"><span class="lg-title" id="lg-title">' + state.root + ' ' + sc.name + '</span>';
+      T.scaleNotes(state.root, state.scale).forEach(function (n) {
+        html += chip(n, hasChord ? 'kind-muted' + (n.degree === '1' ? ' scale-root' : '') : 'role-' + n.role);
+      });
+      html += '</div>';
+    }
     html += '</div><div class="lg-keys">';
     ['root', 'third', 'fifth', 'seventh', 'other'].forEach(function (r) {
+      if (r === 'other' && hasChord) return; // 和弦里没有“其他”
       html += '<span class="lg-key role-' + r + '"><i></i>' + ROLE_NAMES[r] + '</span>';
     });
+    if (hasChord && hasScale) {
+      html += '<span class="lg-key kind-muted"><i></i>其他音阶音</span>'
+        + '<span class="lg-key scale-root"><i></i>音阶根音</span>'
+        + '<span class="lg-key outside"><i></i>调外音</span>';
+    }
     box.innerHTML = html + '</div>';
   }
 
+  function fillSelect(sel, items, withNone) {
+    if (withNone) { var o = document.createElement('option'); o.value = 'none'; o.textContent = '（不显示）'; sel.appendChild(o); }
+    items.forEach(function (it) {
+      var op = document.createElement('option'); op.value = it[0]; op.textContent = it[1]; sel.appendChild(op);
+    });
+  }
+
   function setupControls() {
-    var rootSel = document.getElementById('root-select');
-    var scaleSel = document.getElementById('scale-select');
-    T.ROOTS.forEach(function (r) {
-      var o = document.createElement('option'); o.value = r; o.textContent = r; rootSel.appendChild(o);
-    });
-    var none = document.createElement('option'); none.value = 'none'; none.textContent = '（不显示）'; scaleSel.appendChild(none);
-    T.SCALES.forEach(function (sc) {
-      var o = document.createElement('option'); o.value = sc.id; o.textContent = sc.name; scaleSel.appendChild(o);
-    });
-    rootSel.value = state.root;
-    scaleSel.value = state.scale;
-    rootSel.addEventListener('change', function () { state.root = rootSel.value; saveState(); renderDots(); });
-    scaleSel.addEventListener('change', function () { state.scale = scaleSel.value; saveState(); renderDots(); });
+    var roots = T.ROOTS.map(function (r) { return [r, r]; });
+    var bind = function (id, key, items, withNone) {
+      var sel = document.getElementById(id);
+      fillSelect(sel, items, withNone);
+      sel.value = state[key];
+      sel.addEventListener('change', function () { state[key] = sel.value; saveState(); renderDots(); });
+    };
+    bind('root-select', 'root', roots, false);
+    bind('scale-select', 'scale', T.SCALES.map(function (x) { return [x.id, x.name]; }), true);
+    bind('chord-root-select', 'chordRoot', roots, false);
+    bind('chord-select', 'chord', T.CHORDS.map(function (x) { return [x.id, x.name + '（' + (x.symbol || '大三') + '）']; }), true);
 
     var seg = document.getElementById('label-mode');
     function syncSeg() {

@@ -141,6 +141,74 @@
     return null;
   }
 
+  // ---------------- 和弦 ----------------
+  var CHORDS = [
+    { id: 'maj',   name: '大三',   symbol: '',     degrees: ['1', '3', '5'] },
+    { id: 'm',     name: '小三',   symbol: 'm',    degrees: ['1', '♭3', '5'] },
+    { id: 'dim',   name: '减三',   symbol: 'dim',  degrees: ['1', '♭3', '♭5'] },
+    { id: 'aug',   name: '增三',   symbol: 'aug',  degrees: ['1', '3', '♯5'] },
+    { id: 'maj7',  name: '大七',   symbol: 'maj7', degrees: ['1', '3', '5', '7'] },
+    { id: 'm7',    name: '小七',   symbol: 'm7',   degrees: ['1', '♭3', '5', '♭7'] },
+    { id: '7',     name: '属七',   symbol: '7',    degrees: ['1', '3', '5', '♭7'] },
+    { id: 'm7b5',  name: '半减七', symbol: 'm7♭5', degrees: ['1', '♭3', '♭5', '♭7'] },
+    { id: 'dim7',  name: '减七',   symbol: 'dim7', degrees: ['1', '♭3', '♭5', '𝄫7'] }
+  ];
+
+  function getChord(id) {
+    var c = CHORDS.filter(function (x) { return x.id === id; })[0];
+    if (!c) throw new Error('没有这个和弦：' + id);
+    return c;
+  }
+
+  // 和弦写法，例如 C、Am、Bm7♭5
+  function chordSymbol(rootName, chordId) {
+    return parseNote(rootName).name + getChord(chordId).symbol;
+  }
+
+  function chordNotes(rootName, chordId) {
+    return getChord(chordId).degrees.map(function (deg) {
+      var n = spellDegree(rootName, deg);
+      return { degree: parseDegree(deg).text, name: n.name, pc: n.pc, interval: intervalName(deg), role: roleOf(deg) };
+    });
+  }
+
+  // 从 fromName 到 toName 是几级：按字母相隔 + 半音数判断。例如 G → F 是 ♭7，G → C 是 4
+  // 超出重升/重降范围时返回 null
+  function degreeBetween(fromName, toName) {
+    var a = parseNote(fromName), b = parseNote(toName);
+    var number = ((LETTERS.indexOf(b.letter) - LETTERS.indexOf(a.letter)) + 7) % 7 + 1;
+    var alter = mod12(b.pc - a.pc - MAJOR_SEMITONES[number] + 6) - 6;
+    if (alter < -2 || alter > 2) return null;
+    return ALTER_SYMBOL[alter] + number;
+  }
+
+  // ---------------- 叠加：音阶 + 和弦 ----------------
+  // 返回 { 音高(0～11): 该音在指板上怎么显示 }，没有的音高就不显示
+  //   kind: 'scale'（只有音阶）/ 'chord'（和弦内音）/ 'muted'（叠加时的其他音阶音，淡色）
+  //   outside: 和弦音不在音阶里（调外音）
+  //   scaleRoot: 是音阶根音（叠加时加描边）
+  // 有和弦时，degree / interval 都以和弦根音为准
+  function combine(scaleRoot, scaleId, chordRoot, chordId) {
+    var sn = scaleId && scaleId !== 'none' ? scaleNotes(scaleRoot, scaleId) : [];
+    var cn = chordId && chordId !== 'none' ? chordNotes(chordRoot, chordId) : [];
+    var out = {};
+    for (var pc = 0; pc < 12; pc++) {
+      var c = findByPc(cn, pc), sc = findByPc(sn, pc);
+      if (!c && !sc) continue;
+      if (!cn.length) {
+        out[pc] = { kind: 'scale', name: sc.name, degree: sc.degree, interval: sc.interval, role: sc.role, outside: false, scaleRoot: false };
+      } else if (c) {
+        out[pc] = { kind: 'chord', name: c.name, degree: c.degree, interval: c.interval, role: c.role,
+          outside: sn.length > 0 && !sc, scaleRoot: !!(sc && sc.degree === '1') };
+      } else {
+        var d = degreeBetween(chordRoot, sc.name);
+        out[pc] = { kind: 'muted', name: sc.name, degree: d || sc.name, interval: d ? intervalName(d) : sc.name,
+          role: 'muted', outside: false, scaleRoot: sc.degree === '1' };
+      }
+    }
+    return out;
+  }
+
   var Theory = {
     LETTERS: LETTERS,
     LETTER_PC: LETTER_PC,
@@ -160,7 +228,13 @@
     ROOTS: ROOTS,
     getScale: getScale,
     scaleNotes: scaleNotes,
-    findByPc: findByPc
+    findByPc: findByPc,
+    CHORDS: CHORDS,
+    getChord: getChord,
+    chordSymbol: chordSymbol,
+    chordNotes: chordNotes,
+    degreeBetween: degreeBetween,
+    combine: combine
   };
 
   root.Theory = Theory;
