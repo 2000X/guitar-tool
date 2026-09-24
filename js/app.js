@@ -97,7 +97,7 @@
       el('line', { class: 'string', x1: L.labelW + 8, y1: y, x2: L.endX, y2: y,
         'stroke-width': STRING_WIDTHS[t.string], 'data-string': t.string }, strings);
       var label = el('text', { class: 'string-label', x: L.labelW / 2, y: y, 'text-anchor': 'middle',
-        'dominant-baseline': 'central' }, strings);
+        'dominant-baseline': 'central', 'data-string': t.string }, strings);
       label.textContent = t.name;
     });
 
@@ -127,7 +127,8 @@
 
   var ROLE_NAMES = { root: '根音', third: '三音', fifth: '五音', seventh: '七音', ext: '延伸音', other: '其他' };
   var KEY_VIEW = 'guitarTool.viewState';
-  var DEFAULT_STATE = { root: 'C', scale: 'major', chordRoot: 'C', chord: 'none', label: 'name', frets: T.FRET_COUNT, diatonicSize: 3 };
+  var DEFAULT_STATE = { root: 'C', scale: 'major', chordRoot: 'C', chord: 'none', label: 'name', frets: T.FRET_COUNT, diatonicSize: 3,
+    identify: false, marks: {} };
 
   // 读取上次的设置（读不到或不合法就用默认值）
   function loadState() {
@@ -146,8 +147,20 @@
       chord: st.chord === 'none' || T.CHORDS.some(function (x) { return x.id === st.chord; }) ? st.chord : DEFAULT_STATE.chord,
       label: ['name', 'degree', 'interval'].indexOf(st.label) >= 0 ? st.label : DEFAULT_STATE.label,
       frets: st.frets >= T.MIN_FRETS && st.frets <= T.MAX_FRETS && st.frets % 1 === 0 ? st.frets : DEFAULT_STATE.frets,
-      diatonicSize: st.diatonicSize === 4 ? 4 : 3
+      diatonicSize: st.diatonicSize === 4 ? 4 : 3,
+      identify: st.identify === true,
+      marks: loadMarks(st.marks)
     };
+  }
+  // 识别和弦的标记：{ 弦号: 品 }，每根弦最多一个；不合法的丢掉
+  function loadMarks(m) {
+    var out = {};
+    if (!m || typeof m !== 'object') return out;
+    for (var s = 1; s <= 6; s++) {
+      var f = m[s];
+      if (typeof f === 'number' && f % 1 === 0 && f >= 0 && f <= T.MAX_FRETS) out[s] = f;
+    }
+    return out;
   }
   function saveState() {
     try { window.localStorage.setItem(KEY_VIEW, JSON.stringify(state)); } catch (e) {}
@@ -159,6 +172,14 @@
   }
 
   function renderDots() {
+    var oldMutes = document.getElementById('mute-marks');
+    if (oldMutes) oldMutes.parentNode.removeChild(oldMutes);
+    if (state.identify) {
+      document.querySelectorAll('#fretboard .pos .dot').forEach(function (d) { d.parentNode.removeChild(d); });
+      renderMarks();
+      renderLegend(null);
+      return;
+    }
     var map = T.combine(state.root, state.scale, state.chordRoot, state.chord);
     var hasChord = state.chord !== 'none';
     document.querySelectorAll('#fretboard .pos').forEach(function (g) {
@@ -186,7 +207,7 @@
   function renderLegend(map) {
     var box = document.getElementById('legend');
     var hasScale = state.scale !== 'none', hasChord = state.chord !== 'none';
-    if (!hasScale && !hasChord) { box.hidden = true; box.innerHTML = ''; return; }
+    if (state.identify || (!hasScale && !hasChord)) { box.hidden = true; box.innerHTML = ''; return; }
     box.hidden = false;
     var html = '<div class="lg-lines">';
     if (hasChord) {
@@ -261,6 +282,123 @@
     syncChordRootSelect();
     renderDots();
     renderDiatonic();
+    renderIdentify();
+  }
+
+  // ---------------- v0.4 第 2 步：点选识别和弦 ----------------
+  // 识别开关打开时：指板上只显示标记（不显示音阶/和弦），点位置做标记，每根弦最多一个；
+  // 没标记的弦在空弦位置显示 ×（不弹）。标记的颜色、文字按“最可能的和弦”来定。
+
+  function marksList() {
+    var out = [];
+    Object.keys(state.marks).forEach(function (s) { out.push({ string: +s, fret: state.marks[s] }); });
+    return out;
+  }
+  function identifyNow() {
+    return T.identifyChord(marksList(), { keyRoot: state.root, scaleId: state.scale });
+  }
+
+  function renderMarks() {
+    var r = identifyNow();
+    var best = r.candidates[0];
+    var bestNotes = best ? T.chordNotes(best.root, best.chord) : null;
+    var svg = document.getElementById('fretboard');
+    document.querySelectorAll('#fretboard .pos').forEach(function (g) {
+      var s = +g.getAttribute('data-string'), f = +g.getAttribute('data-fret');
+      if (state.marks[s] !== f) return;
+      var pc = +g.getAttribute('data-pc');
+      var n = bestNotes ? T.findByPc(bestNotes, pc) : null;
+      var note = n || { name: r.notes.filter(function (x) { return x.pc === pc; })[0].name, degree: '', interval: '', role: 'none' };
+      var text = labelOf(note) || note.name;
+      var dot = el('g', { class: 'dot mark role-' + note.role + (text.length > 2 ? ' small' : ''),
+        'data-kind': 'mark', 'data-name': note.name, 'data-degree': note.degree, 'data-interval': note.interval,
+        'data-role': note.role }, g);
+      el('circle', { class: 'body', r: 15 }, dot);
+      el('text', { 'text-anchor': 'middle', 'dominant-baseline': 'central', y: 0.5 }, dot).textContent = text;
+    });
+    // 没标记的弦：空弦位置画 ×
+    var mutes = el('g', { class: 'mute-marks', id: 'mute-marks' }, svg);
+    T.STANDARD_TUNING.forEach(function (t) {
+      if (state.marks[t.string] !== undefined) return;
+      var x = el('text', { class: 'mute-x', x: slotX(0), y: stringY(t.string), 'text-anchor': 'middle',
+        'dominant-baseline': 'central', 'data-string': t.string }, mutes);
+      x.textContent = '×';
+    });
+  }
+
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+  function renderIdentify() {
+    var panel = document.getElementById('identify');
+    var btn = document.getElementById('identify-btn');
+    btn.setAttribute('aria-pressed', state.identify ? 'true' : 'false');
+    document.querySelector('.board-wrap').classList.toggle('identify-on', state.identify);
+    panel.hidden = !state.identify;
+    if (!state.identify) return;
+    var r = identifyNow();
+    document.getElementById('id-shape').textContent = r.notes.length ? '指法（6→1 弦）' + r.shape : '';
+    document.getElementById('id-clear').disabled = !r.notes.length;
+    var noteNames = r.notes.map(function (n) { return n.name; }).filter(function (n, i, a) { return a.indexOf(n) === i; });
+    var html = '';
+    if (r.kind === 'none') {
+      html = '<p class="id-msg" id="id-msg">还没有标记。点指板上的位置试试。</p>';
+    } else if (r.kind === 'note') {
+      html = '<p class="id-msg" id="id-msg">只有一个音：' + esc(r.bass.name) + '</p>';
+    } else if (r.kind === 'interval') {
+      html = '<p class="id-msg" id="id-msg">两个音 ' + esc(r.interval.low) + ' – ' + esc(r.interval.high) + '：' + r.interval.name + '（还不构成和弦）</p>';
+    } else if (r.kind === 'unknown') {
+      html = '<p class="id-msg" id="id-msg">认不出来：' + esc(noteNames.join(' ')) + ' 不是和弦库里的和弦（或缺了不能缺的音）</p>';
+    } else {
+      var best = r.candidates[0];
+      html += '<div class="id-cands" id="id-cands" role="group" aria-label="识别结果">';
+      r.candidates.slice(0, 8).forEach(function (c, i) {
+        html += '<button type="button" class="id-cand' + (i === 0 ? ' best' : '') + '" data-root="' + esc(c.root)
+          + '" data-chord="' + esc(c.chord) + '" title="在指板上显示 ' + esc(c.symbol) + '（' + esc(c.notes.join(' ')) + '）">'
+          + (c.roman ? '<span class="id-roman">' + esc(c.roman) + '</span>' : '') + '<span class="id-text">' + esc(c.text) + '</span></button>';
+        if (i === 0 && r.candidates.length > 1) html += '<span class="id-or">其他可能</span>';
+      });
+      html += '</div><div class="id-detail" id="id-detail">';
+      var missing = best.missing;
+      html += '<span class="lg-notes id-notes" id="id-notes"><span class="lg-title">' + esc(best.symbol) + '</span>';
+      T.chordNotes(best.root, best.chord).forEach(function (n) {
+        var miss = missing.indexOf(n.degree) >= 0;
+        html += chip(n, 'role-' + n.role + (miss ? ' missing' : ''));
+      });
+      html += '</span>';
+      var info = [];
+      if (missing.length) info.push('虚线框 = 没按到的音（缺 ' + missing.join('、') + '）');
+      if (best.roman) info.push('在 ' + state.root + ' ' + T.getScale(T.diatonicBase(state.scale)).name + '里是 ' + best.roman);
+      if (best.equivalents.length > 1) info.push('同样成立：' + best.equivalents.slice(1).join('、'));
+      if (best.bass) info.push('最低音是 ' + best.bass + '（不是根音）');
+      if (info.length) html += '<span class="id-info" id="id-info">' + esc(info.join(' · ')) + '</span>';
+      html += '</div>';
+    }
+    document.getElementById('id-result').innerHTML = html;
+    document.querySelectorAll('#id-cands .id-cand').forEach(function (b) {
+      b.addEventListener('click', function () {
+        state.chordRoot = b.getAttribute('data-root');
+        state.chord = b.getAttribute('data-chord');
+        state.identify = false; // 关闭识别，回到音阶/和弦显示，看这个和弦在整个指板上的位置
+        update();
+      });
+    });
+  }
+
+  // 点指板：同一弦同一品 = 取消；同一弦别的品 = 替换；点弦名 = 这根弦不弹
+  function onBoardClick(e) {
+    if (!state.identify) return;
+    var lab = e.target.closest && e.target.closest('.string-label');
+    if (lab) { delete state.marks[lab.getAttribute('data-string')]; saveState(); renderDots(); renderIdentify(); return; }
+    var pos = e.target.closest && e.target.closest('.pos');
+    if (!pos) return;
+    var s = pos.getAttribute('data-string'), f = +pos.getAttribute('data-fret');
+    if (state.marks[s] === f) delete state.marks[s]; else state.marks[s] = f;
+    saveState(); renderDots(); renderIdentify();
+  }
+
+  function setIdentify(on) {
+    state.identify = on;
+    update();
   }
 
   // ---------------- 顺阶和弦 ----------------
@@ -306,7 +444,7 @@
     if (!x) return;
     var on = state.chord === x.chord && T.parseNote(state.chordRoot).pc === x.pc;
     if (on) { state.chord = 'none'; }
-    else { state.chordRoot = x.root; state.chord = x.chord; }
+    else { state.chordRoot = x.root; state.chord = x.chord; state.identify = false; }
     update();
   }
 
@@ -329,6 +467,7 @@
     if (tag === 'SELECT' || tag === 'INPUT' || tag === 'TEXTAREA' || (t && t.isContentEditable)) return;
     var k = e.key;
     if (k >= '1' && k <= '7' && k.length === 1) { pickStep(+k); }
+    else if (k === 'Escape' && state.identify) { setIdentify(false); }
     else if (k === '0' || k === 'Escape') { if (state.chord === 'none') return; state.chord = 'none'; update(); }
     else if (k === 't' || k === 'T') { setDiatonicSize(state.diatonicSize === 3 ? 4 : 3); }
     else return;
@@ -356,7 +495,11 @@
       var sel = document.getElementById(id);
       fillSelect(sel, items, withNone);
       sel.value = state[key];
-      sel.addEventListener('change', function () { state[key] = sel.value; update(); });
+      sel.addEventListener('change', function () {
+        state[key] = sel.value;
+        if (key === 'chord' || key === 'chordRoot') state.identify = false; // 改和弦 = 回到和弦显示
+        update();
+      });
     };
     bind('root-select', 'root', roots, false);
     bind('scale-select', 'scale', T.SCALES.map(function (x) { return [x.id, x.name]; }), true);
@@ -370,12 +513,17 @@
       var op = document.createElement('option'); op.value = n; op.textContent = n + ' 品'; fretSel.appendChild(op);
     }
     fretSel.value = String(state.frets);
-    fretSel.addEventListener('change', function () { state.frets = +fretSel.value; saveState(); draw(); renderDots(); });
+    fretSel.addEventListener('change', function () { state.frets = +fretSel.value; saveState(); draw(); renderDots(); renderIdentify(); });
 
     document.getElementById('dia-size').querySelectorAll('button').forEach(function (b) {
       b.addEventListener('click', function () { setDiatonicSize(+b.getAttribute('data-size')); });
     });
     document.addEventListener('keydown', onKey);
+
+    // 识别和弦
+    document.getElementById('identify-btn').addEventListener('click', function () { setIdentify(!state.identify); });
+    document.getElementById('id-clear').addEventListener('click', function () { state.marks = {}; saveState(); renderDots(); renderIdentify(); });
+    document.getElementById('fretboard').addEventListener('click', onBoardClick);
 
     var seg = document.getElementById('label-mode');
     function syncSeg() {

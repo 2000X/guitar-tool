@@ -786,6 +786,139 @@ const def = (scheme, key) => themeItems.find(i => i.key === key)[scheme];
     await context.close();
   }
 
+  // ---------- v0.4 第 2 步：点选识别和弦 ----------
+  {
+    const { context, page, errors } = await openPage('index.html', { colorScheme: 'light', viewport: { width: 1400, height: 900 } });
+    const tap = (s, f) => page.click(`#fretboard .pos[data-string="${s}"][data-fret="${f}"]`);
+    const marks = () => page.evaluate(() => [...document.querySelectorAll('.pos')].filter(g => g.querySelector('.dot')).map(g => {
+      const d = g.querySelector('.dot');
+      return { s: +g.dataset.string, f: +g.dataset.fret, text: d.querySelector('text').textContent, kind: d.dataset.kind,
+        role: d.dataset.role, fill: getComputedStyle(d.querySelector('.body')).fill };
+    }));
+    const at = (list, s, f) => list.find(d => d.s === s && d.f === f);
+    const mutes = () => page.$$eval('#mute-marks .mute-x', xs => xs.map(x => +x.dataset.string).sort().join(','));
+    const cands = () => page.$$eval('#id-cands .id-cand .id-text', xs => xs.map(x => x.textContent));
+    const romanOf = () => page.$$eval('#id-cands .id-cand.best .id-roman', xs => xs.map(x => x.textContent).join(''));
+    const msg = () => page.$eval('#id-msg', x => x.textContent).catch(() => null);
+    const RGB = k => hexToRgb(def('light', k));
+
+    check('识别：开始时关闭，面板隐藏', await page.getAttribute('#identify-btn', 'aria-pressed') === 'false' && await page.isHidden('#identify'));
+    await page.click('#identify-btn');
+    check('识别：打开后面板出现，按钮高亮', await page.getAttribute('#identify-btn', 'aria-pressed') === 'true' && await page.isVisible('#identify')
+      && await page.$eval('#identify-btn', b => getComputedStyle(b).backgroundColor) === RGB('id-on'));
+    check('识别：打开后指板只显示标记（C 大调的圆点消失），图例隐藏', (await marks()).length === 0 && await page.isHidden('#legend'));
+    check('识别：没标记时 6 根弦都显示 ×', await mutes() === '1,2,3,4,5,6');
+    check('识别：没标记时有提示', (await msg() || '').includes('还没有标记'), await msg());
+
+    // x32010 → C
+    for (const [s, f] of [[5, 3], [4, 2], [3, 0], [2, 1], [1, 0]]) await tap(s, f);
+    let m = await marks();
+    check('x32010：5 个标记，6 弦显示 ×', m.length === 5 && m.every(x => x.kind === 'mark') && await mutes() === '6', [m.length, await mutes()]);
+    check('x32010：指法写法显示 x32010', (await page.textContent('#id-shape')).includes('x32010'), await page.textContent('#id-shape'));
+    check('x32010：最可能的和弦是 C，C 大调里是 I', (await cands())[0] === 'C' && await romanOf() === 'I', [await cands(), await romanOf()]);
+    check('x32010：标记按和弦着色（C 红、E 橙、G 蓝）', at(m, 5, 3)?.fill === RGB('deg-root') && at(m, 4, 2)?.fill === RGB('deg-third') && at(m, 3, 0)?.fill === RGB('deg-fifth'), m);
+    check('x32010：标记显示音名 C E G C E', [at(m, 5, 3), at(m, 4, 2), at(m, 3, 0), at(m, 2, 1), at(m, 1, 0)].map(x => x?.text).join(' ') === 'C E G C E');
+
+    // 同一弦点别的品 = 替换：5 弦 3 品 → 5 弦 0 品（A），再把 1 弦改成 3 品（G）→ A E G C G = Am7
+    await tap(5, 0); await tap(1, 3);
+    m = await marks();
+    check('同一弦点别的品 = 替换（5 弦只剩 0 品）', !at(m, 5, 3) && !!at(m, 5, 0) && m.length === 5);
+    check('x02013：Am7 第一（C 大调里是 vi7），C6/A 第二', JSON.stringify((await cands()).slice(0, 2)) === '["Am7","C6/A"]' && await romanOf() === 'vi7', [await cands(), await romanOf()]);
+    // 再点一次 = 取消
+    await tap(5, 0);
+    m = await marks();
+    check('再点同一位置 = 取消，这根弦显示 ×', !at(m, 5, 0) && m.length === 4 && await mutes() === '5,6', await mutes());
+    check('E G C G（最低音 E）→ C/E', (await cands())[0] === 'C/E', await cands());
+    // 点弦名 = 不弹
+    await page.click('#fretboard .string-label[data-string="4"]');
+    check('点弦名 = 这根弦不弹', (await marks()).length === 3 && await mutes() === '4,5,6', await mutes());
+    // 清除
+    await page.click('#id-clear');
+    check('清除标记', (await marks()).length === 0 && await mutes() === '1,2,3,4,5,6' && (await msg() || '').includes('还没有标记'));
+
+    // 一个音、两个音、认不出来
+    await tap(5, 3);
+    check('一个音 → “只有一个音：C”', (await msg() || '').includes('只有一个音：C'), await msg());
+    m = await marks();
+    check('认不出和弦时标记用“标记圆点”颜色', at(m, 5, 3)?.fill === RGB('mark'), m);
+    await tap(4, 2);
+    check('C E → “大三度（还不构成和弦）”', (await msg() || '').includes('C – E：大三度'), await msg());
+    await tap(4, 0); await tap(3, 6);
+    check('C D C♯ → 认不出来', (await msg() || '').includes('认不出来'), await msg());
+    await page.click('#id-clear');
+
+    // 用户实际点过的 x32355 → C13(no5, no9)
+    for (const [s, f] of [[5, 3], [4, 2], [3, 3], [2, 5], [1, 5]]) await tap(s, f);
+    check('x32355 → 只有 C13(no5, no9)', JSON.stringify(await cands()) === '["C13(no5, no9)"]', await cands());
+    const notes = await page.$$eval('#id-notes .lg-note', ns => ns.map(n => n.querySelector('b').textContent + (n.classList.contains('missing') ? '(缺)' : '')));
+    check('C13 组成音：G、D 标为“缺”', notes.join(' ') === 'C E G(缺) B♭ D(缺) A', notes.join(' '));
+    check('缺的音用虚线框', await page.$eval('#id-notes .lg-note.missing b', b => getComputedStyle(b).borderStyle) === 'dashed');
+    m = await marks();
+    check('x32355：A 是绿色延伸音，B♭ 紫色七音', at(m, 1, 5)?.fill === RGB('deg-ext') && at(m, 3, 3)?.fill === RGB('deg-seventh'), m);
+    await page.screenshot({ path: path.join(outDir, 'v04b_x32355_name_light.png') });
+    await page.click('#label-mode [data-label="degree"]');
+    m = await marks();
+    check('音级模式：标记显示 1 3 ♭7 3 13', [at(m, 5, 3), at(m, 4, 2), at(m, 3, 3), at(m, 2, 5), at(m, 1, 5)].map(x => x?.text).join(' ') === '1 3 ♭7 3 13',
+      m.map(x => x.text).join(' '));
+    await page.screenshot({ path: path.join(outDir, 'v04b_x32355_degree_light.png') });
+
+    // 刷新：开关和标记都记住
+    await page.reload();
+    check('刷新后记住：识别开着、5 个标记', await page.getAttribute('#identify-btn', 'aria-pressed') === 'true' && (await marks()).length === 5);
+
+    // 点识别结果 → 关闭识别，指板显示 C13
+    await page.click('#id-cands .id-cand.best');
+    check('点识别结果 → 关闭识别，和弦设成 C13', await page.getAttribute('#identify-btn', 'aria-pressed') === 'false' && await page.isHidden('#identify')
+      && await page.inputValue('#chord-select') === '13' && await page.inputValue('#chord-root-select') === 'C');
+    const dotsNow = await page.$$eval('.pos .dot', ds => ds.map(d => d.dataset.kind));
+    check('关闭识别后恢复音阶/和弦显示，× 消失', dotsNow.includes('chord') && !dotsNow.includes('mark') && await page.locator('#mute-marks').count() === 0 && await page.isVisible('#legend'));
+    await page.click('#identify-btn');
+    check('再打开识别，标记还在', (await marks()).length === 5);
+
+    // Esc 关闭识别；顺阶和弦按钮也会关闭识别
+    await page.keyboard.press('Escape');
+    check('Esc 关闭识别（和弦不变）', await page.getAttribute('#identify-btn', 'aria-pressed') === 'false' && await page.inputValue('#chord-select') === '13');
+    await page.click('#identify-btn');
+    await page.click('#dia-buttons .dia-btn[data-step="5"]');
+    check('识别时点顺阶和弦 → 关闭识别，显示 G', await page.getAttribute('#identify-btn', 'aria-pressed') === 'false' && await page.inputValue('#chord-root-select') === 'G');
+
+    // 按调拼写：C♯ 大调里 F C G♯ → E♯m（iii）
+    await page.selectOption('#root-select', 'C♯');
+    await page.click('#identify-btn');
+    await page.click('#id-clear');
+    await page.click('#label-mode [data-label="name"]');
+    for (const [s, f] of [[6, 1], [5, 3], [3, 1]]) await tap(s, f);
+    check('C♯ 大调里 F C G♯ → E♯m，级数 iii', (await cands())[0] === 'E♯m' && await romanOf() === 'iii', [await cands(), await romanOf()]);
+    m = await marks();
+    check('标记也按调拼写：E♯ B♯ G♯', [at(m, 6, 1), at(m, 5, 3), at(m, 3, 1)].map(x => x?.text).join(' ') === 'E♯ B♯ G♯', m.map(x => x.text));
+    await page.click('#id-cands .id-cand.best');
+    check('点 E♯m → 和弦根音下拉框出现 E♯', await page.inputValue('#chord-root-select') === 'E♯' && await page.inputValue('#chord-select') === 'm');
+
+    // 调色面板
+    await page.click('#color-btn');
+    check('调色面板有“识别和弦”各项', await page.locator('.cp-item[data-key="mark"], .cp-item[data-key="mute-mark"], .cp-item[data-key="missing-mark"], .cp-item[data-key="id-on"]').count() === 4);
+    await page.click('#cp-close');
+    check('页面无报错（识别和弦）', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    const { context, page, errors } = await openPage('index.html', { colorScheme: 'dark', viewport: { width: 1400, height: 900 } });
+    const tap = (s, f) => page.click(`#fretboard .pos[data-string="${s}"][data-fret="${f}"]`);
+    await page.click('#identify-btn');
+    for (const [s, f] of [[5, 3], [4, 2], [3, 1], [2, 1]]) await tap(s, f);
+    const info = await page.textContent('#id-info').catch(() => '');
+    check('x3211x → Caug，同样成立：Eaug、A♭aug', (await page.textContent('#id-cands .id-cand.best')).includes('Caug') && info.includes('Eaug、A♭aug'), info);
+    check('深色：× 用“不弹的弦”颜色', await page.$eval('#mute-marks .mute-x', x => getComputedStyle(x).fill) === hexToRgb(def('dark', 'mute-mark')));
+    await page.screenshot({ path: path.join(outDir, 'v04b_Caug_dark.png') });
+    await page.click('#id-clear');
+    for (const [s, f] of [[4, 0], [3, 2], [2, 3], [1, 3]]) await tap(s, f);
+    await page.screenshot({ path: path.join(outDir, 'v04b_Dsus4_dark.png') });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: path.join(outDir, 'v04b_phone_dark.png'), fullPage: true });
+    check('页面无报错（识别和弦 深色）', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
   // ---------- 自检页 ----------
   {
     const { context, page, errors } = await openPage('自检.html', { viewport: { width: 1000, height: 900 } });

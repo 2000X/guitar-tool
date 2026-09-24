@@ -399,6 +399,91 @@
       check(G, '组成音全部在音阶里，拼写一致', badNotes, []);
     });
 
+    // ---------- v0.4 第 2 步：识别和弦（期望值独立写死） ----------
+    G = '识别和弦';
+    // 指法写法（从 6 弦到 1 弦）换成标记：'x32010' 或 'x-10-12-12-11-x'
+    var shape = function (s) {
+      var a = s.indexOf('-') >= 0 ? s.split('-') : s.split('');
+      var out = [];
+      a.forEach(function (f, i) { if (f !== 'x') out.push({ string: 6 - i, fret: +f }); });
+      return out;
+    };
+    var texts = function (r) { return r.candidates.map(function (c) { return c.text; }); };
+    var top = function (s, opts) { var r = T.identifyChord(shape(s), opts); return r.candidates.length ? r.candidates[0].text : null; };
+    safe(G, '标准答案', function () {
+      check(G, '#1 x32010 → C', top('x32010'), 'C');
+      check(G, '#2 xx0232 → D', top('xx0232'), 'D');
+      check(G, '#3 x02210 → Am', top('x02210'), 'Am');
+      check(G, '#4 022100 → E', top('022100'), 'E');
+      check(G, '#5 320003 → G', top('320003'), 'G');
+      check(G, '#6 x32310 → C7(no5)（这个常用按法没有 G）', top('x32310'), 'C7(no5)');
+      check(G, '#7 xx0233 → Dsus4', top('xx0233'), 'Dsus4');
+      check(G, '#8 x32033 → Cadd9', top('x32033'), 'Cadd9');
+      check(G, '#9 C E G A、C 在最低音（8x798x）→ C6 第一，Am7/C 第二', texts(T.identifyChord(shape('8x798x'))).slice(0, 2), ['C6', 'Am7/C']);
+      check(G, '#10 A G C E、A 在最低音（5x555x）→ Am7 第一，C6/A 第二', texts(T.identifyChord(shape('5x555x'))).slice(0, 2), ['Am7', 'C6/A']);
+      check(G, '#11 x32355（C E B♭ A）→ 只有 C13(no5, no9)', texts(T.identifyChord(shape('x32355'))), ['C13(no5, no9)']);
+      check(G, '#12 x3x2x1（C A F）→ F/C', top('x3x2x1'), 'F/C');
+    });
+    safe(G, '缺音规则', function () {
+      var r = T.identifyChord([{ string: 5, fret: 3 }, { string: 4, fret: 2 }]); // C E
+      check(G, '三和弦不能缺 5：只按 C、E → 没有和弦，显示音程 大三度', [r.kind, r.candidates.length, r.interval && r.interval.name], ['interval', 0, '大三度']);
+      check(G, 'C E B♭ → C7(no5)', top('x3231x'), 'C7(no5)');
+      // C E B♭ D：9 和弦缺 5 可以；13 和弦必须有 13
+      var r2 = T.identifyChord([{ string: 5, fret: 3 }, { string: 4, fret: 2 }, { string: 3, fret: 3 }, { string: 2, fret: 3 }]);
+      check(G, 'C E B♭ D → C9(no5)，不会认成 C13', [r2.candidates[0].text, texts(r2).some(function (t) { return t.indexOf('13') >= 0; })], ['C9(no5)', false]);
+      // C G B♭：七和弦不能缺 3
+      var r3 = T.identifyChord([{ string: 5, fret: 3 }, { string: 4, fret: 5 }, { string: 3, fret: 3 }]);
+      check(G, 'C G B♭ → 不认成 C7（七和弦不能缺 3）', r3.candidates.some(function (c) { return c.chord === '7'; }), false);
+      // E G B♭：根音不能缺
+      var r4 = T.identifyChord([{ string: 4, fret: 2 }, { string: 3, fret: 0 }, { string: 3 - 1, fret: 11 }]);
+      check(G, 'E G B♭ → Edim，不认成 C7（根音不能缺）', [r4.candidates[0].text, r4.candidates.some(function (c) { return c.root === 'C'; })], ['Edim', false]);
+      // C E♭ A：减七的 ♭5 不能省
+      var r5 = T.identifyChord([{ string: 5, fret: 3 }, { string: 4, fret: 1 }, { string: 3, fret: 2 }]);
+      check(G, 'C E♭ A → 不认成 Cdim7（♭5 不能省）', r5.candidates.some(function (c) { return c.chord === 'dim7'; }), false);
+      // C E B♭ D F（没有 G）→ C11(no5)
+      var r6 = T.identifyChord([{ string: 5, fret: 3 }, { string: 4, fret: 2 }, { string: 3, fret: 3 }, { string: 2, fret: 3 }, { string: 1, fret: 1 }]);
+      check(G, 'C E B♭ D F → C11(no5)', r6.candidates[0].text, 'C11(no5)');
+      // C B♭ D F：11 和弦可缺 3 和 5
+      var r7 = T.identifyChord([{ string: 5, fret: 3 }, { string: 3, fret: 3 }, { string: 2, fret: 3 }, { string: 1, fret: 1 }]);
+      check(G, 'C B♭ D F → 候选里有 C11(no3, no5)', texts(r7).indexOf('C11(no3, no5)') >= 0, true);
+      check(G, 'x3221x（C E A C）→ Am/C 第一，C6(no5) 第二', texts(T.identifyChord(shape('x3221x'))), ['Am/C', 'C6(no5)']);
+    });
+    safe(G, '对称和弦、拼写、级数', function () {
+      var aug = T.identifyChord(shape('x3211x')).candidates[0];
+      check(G, 'C E G♯ → Caug = Eaug = A♭aug', [aug.text, aug.equivalents], ['Caug', ['Caug', 'Eaug', 'A♭aug']]);
+      var d7 = T.identifyChord(shape('xx4545'));
+      check(G, 'F♯ C D♯ A → 只有一项 F♯dim7，同样成立：Cdim7、D♯dim7、Adim7',
+        [d7.candidates.length, d7.candidates[0].text, d7.candidates[0].equivalents.slice().sort()],
+        [1, 'F♯dim7', ['Adim7', 'Cdim7', 'D♯dim7', 'F♯dim7']]);
+      check(G, '没有调时：C♯ F G♯ → D♭（升降号少）', top('x46664'), 'D♭');
+      check(G, '没有调时：C♯ E G♯ → C♯m', top('x46654'), 'C♯m');
+      var fm = [{ string: 6, fret: 1 }, { string: 5, fret: 3 }, { string: 3, fret: 1 }];
+      check(G, 'F C G♯ 没有调 → Fm', top('13x1xx'), 'Fm');
+      var e = T.identifyChord(fm, { keyRoot: 'C♯', scaleId: 'major' }).candidates[0];
+      check(G, '同样的音在 C♯ 大调里 → E♯m，级数 iii', [e.text, e.roman], ['E♯m', 'iii']);
+      var c = T.identifyChord(shape('x32010'), { keyRoot: 'G', scaleId: 'major' }).candidates[0];
+      check(G, 'x32010 在 G 大调里是 IV', c.roman, 'IV');
+      check(G, 'x02013（Am7）在 C 大调里是 vi7', T.identifyChord(shape('x02013'), { keyRoot: 'C', scaleId: 'major' }).candidates[0].roman, 'vi7');
+      check(G, '不在调里的和弦没有级数：C 大调里的 E', T.identifyChord(shape('022100'), { keyRoot: 'C', scaleId: 'major' }).candidates[0].roman, null);
+      check(G, '小调五声按自然小调给级数：A 小调五声里 C 是 III', T.identifyChord(shape('x32010'), { keyRoot: 'A', scaleId: 'minor-pentatonic' }).candidates[0].roman, 'III');
+    });
+    safe(G, '其他情况', function () {
+      check(G, '什么都没按 → none', T.identifyChord([]).kind, 'none');
+      var one = T.identifyChord(shape('x3xxxx'));
+      check(G, '只按一个音 → note，音名 C', [one.kind, one.bass.name], ['note', 'C']);
+      var oct = T.identifyChord(shape('x3x5xx'));
+      check(G, '两个 C（八度）也算一个音', oct.kind, 'note');
+      var tri = T.identifyChord(shape('xx23xx'));
+      check(G, 'E、B♭ → 三全音', [tri.kind, tri.interval.low, tri.interval.high, tri.interval.name], ['interval', 'E', 'B♭', '三全音']);
+      check(G, 'x35xxx（C G）→ C5', top('x35xxx'), 'C5');
+      check(G, '最低音按实际音高算，不按弦号：6 弦 8 品 C 比 5 弦空弦 A 高 → Am（不是 Am/C）', top('8-0-2-x-x-x'), 'Am');
+      check(G, '升降号一样多时用升号：F♯ A♯ C♯（244322）→ F♯', top('244322'), 'F♯');
+      check(G, '指法写法', [T.identifyChord(shape('x32010')).shape, T.identifyChord(shape('x-10-12-12-11-x')).shape], ['x32010', 'x-10-12-12-11-x']);
+      var dropD = [{ string: 1, name: 'E', midi: 64 }, { string: 2, name: 'B', midi: 59 }, { string: 3, name: 'G', midi: 55 },
+        { string: 4, name: 'D', midi: 50 }, { string: 5, name: 'A', midi: 45 }, { string: 6, name: 'D', midi: 38 }];
+      check(G, '调弦作为参数：Drop D 下 000xxx（D A D）→ D5；标准调弦下（E A D）不是 D5', [top('000xxx', { tuning: dropD }), top('000xxx') !== 'D5'], ['D5', true]);
+    });
+
     // ---------- 全面检查：每根弦每一品 ----------
     G = '全面检查：指板每个位置';
     safe(G, '逐品', function () {

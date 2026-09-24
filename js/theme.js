@@ -50,6 +50,14 @@
       { key: 'dia-active',      label: '当前和弦按钮底色',   light: '#1f2328', dark: '#e7e7e7' },
       { key: 'dia-active-text', label: '当前和弦按钮文字',   light: '#ffffff', dark: '#1d2024' }
     ]},
+    { name: '识别和弦', items: [
+      { key: 'mark',        label: '标记圆点（认不出和弦时）', light: '#3d434b', dark: '#c9ced4' },
+      { key: 'mark-text',   label: '标记圆点上的文字',         light: '#ffffff', dark: '#1d2024' },
+      { key: 'mute-mark',   label: '不弹的弦（×）',            light: '#a14a44', dark: '#e0736c' },
+      { key: 'missing-mark', label: '没按到的和弦音（虚线框）', light: '#8b929a', dark: '#6e757e' },
+      { key: 'id-on',       label: '“识别和弦”开关打开时的底色', light: '#1f9d6b', dark: '#35b983' },
+      { key: 'id-on-text',  label: '“识别和弦”开关打开时的文字', light: '#ffffff', dark: '#15171a' }
+    ]},
     { name: '自检页', items: [
       { key: 'pass', label: '通过 ✓',   light: '#1a7f37', dark: '#4ac26b' },
       { key: 'fail', label: '失败 ✗',   light: '#cf222e', dark: '#ff7b72' },

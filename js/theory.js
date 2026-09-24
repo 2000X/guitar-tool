@@ -285,6 +285,147 @@
     return same.filter(function (r) { return n.alter > 0 ? r.indexOf('♯') > 0 : r.indexOf('♭') > 0; })[0] || same[0];
   }
 
+  // ---------------- 识别和弦（v0.4 第 2 步） ----------------
+  // 输入：按了哪些弦的哪一品（每根弦最多一个），输出：最可能的和弦 + 其他候选。
+  // 规则（2026-09-24 与用户确认）：
+  //   1. 按到的每个音都必须属于这个和弦（不能多出音）；根音必须按到
+  //   2. 可以缺的音：4 个音以上的和弦可缺纯五度 5；13 和弦还可缺 9；11 和弦还可缺 3；其他音都不能缺
+  //   3. 排序：缺的音少的优先 → 根音在最低音的优先 → 结构简单的优先（按和弦分组顺序）
+  //   4. 写法：C13(no5, no9)；低音不是根音时加斜线 Am7/C
+  //   5. 增三、减七等对称和弦：同样成立的名字合并成一项（equivalents）
+  // 注意：这里只影响识别结果，不改指板上和弦的显示（指板仍显示全部组成音）
+
+  // 默认写法（单个音、没有调可参考时）
+  var DEFAULT_NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+  // 两个音之间的音程（半音数 → 名称），用于只按了两个音的情况
+  var INTERVAL_CN = ['纯一度', '小二度', '大二度', '小三度', '大三度', '纯四度', '三全音', '纯五度', '小六度', '大六度', '小七度', '大七度'];
+
+  function degreeSemitones(degreeText) {
+    var d = parseDegree(degreeText);
+    return MAJOR_SEMITONES[d.number] + d.alter;
+  }
+
+  // 这个和弦允许缺哪些音级
+  function canOmit(chord, degreeText) {
+    if (degreeText === '5') return chord.degrees.length >= 4;
+    if (degreeText === '9') return chord.id === '13';
+    if (degreeText === '3') return chord.id === '11';
+    return false;
+  }
+
+  // 某个音高做根音、配某种和弦时，根音怎么写：
+  //   有调时，根音在调里就按调拼写；否则在两种写法（升号/降号）里选整个和弦升降号最少的，一样多时选升号
+  function spellRoot(pc, chordId, keyNotes) {
+    var inKey = keyNotes ? findByPc(keyNotes, pc) : null;
+    if (inKey) {
+      try { chordNotes(inKey.name, chordId); return inKey.name; } catch (e) { /* 拼不出来就用下面的办法 */ }
+    }
+    var options = ROOTS.filter(function (r) { return parseNote(r).pc === pc; });
+    var best = null, bestScore = Infinity;
+    options.forEach(function (r) {
+      var score;
+      try {
+        score = chordNotes(r, chordId).reduce(function (s, n) { return s + Math.abs(parseNote(n.name).alter); }, 0);
+      } catch (e) { return; }
+      score = score * 2 + (r.indexOf('♭') > 0 ? 1 : 0); // 一样多时升号（或本位音）优先
+      if (score < bestScore) { bestScore = score; best = r; }
+    });
+    return best;
+  }
+
+  // 指法写法，从 6 弦到 1 弦，如 x32010；有两位数品格时用“-”隔开，如 x-10-12-12-11-x
+  function shapeText(marks, stringCount) {
+    var n = stringCount || 6, byString = {};
+    marks.forEach(function (m) { byString[m.string] = m.fret; });
+    var parts = [], wide = false;
+    for (var s = n; s >= 1; s--) {
+      var f = byString[s];
+      if (f === undefined || f === null) parts.push('x');
+      else { parts.push(String(f)); if (f >= 10) wide = true; }
+    }
+    return parts.join(wide ? '-' : '');
+  }
+
+  // marks：[{ string: 弦号, fret: 品 }]，没按的弦不写（= 不弹 ×）；每根弦最多一个
+  // opts：{ tuning 调弦（默认标准调弦）, keyRoot 调的根音, scaleId 音阶（用来按调拼写、给出级数） }
+  // 返回：{ kind: 'none' | 'note' | 'interval' | 'chord' | 'unknown', shape, notes, bass, interval, candidates }
+  //   candidates 每项：{ root, chord, symbol, missing, bass, text, equivalents, roman }
+  function identifyChord(marks, opts) {
+    opts = opts || {};
+    var tuning = opts.tuning || STANDARD_TUNING;
+    var played = (marks || []).filter(function (m) { return typeof m.fret === 'number' && m.fret >= 0; })
+      .map(function (m) {
+        var midi = midiAt(m.string, m.fret, tuning);
+        return { string: m.string, fret: m.fret, midi: midi, pc: mod12(midi) };
+      })
+      .sort(function (a, b) { return a.midi - b.midi || b.string - a.string; });
+
+    var base = diatonicBase(opts.scaleId) || (opts.scaleId && opts.scaleId !== 'none' ? opts.scaleId : null);
+    var keyNotes = null;
+    if (opts.keyRoot && base) { try { keyNotes = scaleNotes(opts.keyRoot, base); } catch (e) { keyNotes = null; } }
+    var nameOf = function (pc) { var k = keyNotes && findByPc(keyNotes, pc); return k ? k.name : DEFAULT_NAMES[pc]; };
+
+    var pcs = [];
+    played.forEach(function (n) { if (pcs.indexOf(n.pc) < 0) pcs.push(n.pc); });
+    var out = { kind: 'none', shape: shapeText(played, tuning.length), notes: played, bass: null, interval: null, candidates: [] };
+    if (!played.length) return out;
+    var bassPc = played[0].pc;
+    out.bass = { pc: bassPc, name: nameOf(bassPc) };
+    played.forEach(function (n) { n.name = nameOf(n.pc); });
+    if (pcs.length === 1) { out.kind = 'note'; return out; }
+    if (pcs.length === 2) {
+      var semis = mod12(pcs[1] - pcs[0]);
+      out.interval = { low: nameOf(pcs[0]), high: nameOf(pcs[1]), semitones: semis, name: INTERVAL_CN[semis] };
+    }
+
+    var groupOrder = CHORD_GROUPS.map(function (g) { return g.id; });
+    var list = [];
+    pcs.forEach(function (rootPc, rootOrder) {
+      CHORDS.forEach(function (c, ci) {
+        var chordPcs = c.degrees.map(function (d) { return mod12(rootPc + degreeSemitones(d)); });
+        if (!pcs.every(function (p) { return chordPcs.indexOf(p) >= 0; })) return;          // 多出了音
+        var missing = c.degrees.filter(function (d, i) { return pcs.indexOf(chordPcs[i]) < 0; });
+        if (!missing.every(function (d) { return canOmit(c, d); })) return;                // 缺了不能缺的音
+        var rootName = spellRoot(rootPc, c.id, keyNotes);
+        if (!rootName) return;
+        var cn = chordNotes(rootName, c.id);
+        var slash = rootPc === bassPc ? null : findByPc(cn, bassPc).name;
+        var symbol = rootName + c.symbol;
+        var m = null;
+        if (opts.keyRoot && opts.scaleId) { try { m = diatonicMatch(opts.keyRoot, opts.scaleId, rootName, c.id); } catch (e) { m = null; } }
+        list.push({
+          root: rootName, chord: c.id, symbol: symbol, missing: missing, bass: slash,
+          text: symbol + (missing.length ? '(' + missing.map(function (d) { return 'no' + d; }).join(', ') + ')' : '') + (slash ? '/' + slash : ''),
+          equivalents: [symbol], roman: m ? m.item.roman : null,
+          notes: cn.map(function (n) { return n.name; }),
+          _key: [missing.length, slash ? 1 : 0, groupOrder.indexOf(c.group), ci, rootOrder],
+          _same: c.id + '|' + chordPcs.slice().sort(function (a, b) { return a - b; }).join(',') + '|' + missing.length
+        });
+      });
+    });
+    list.sort(function (a, b) {
+      for (var i = 0; i < a._key.length; i++) if (a._key[i] !== b._key[i]) return a._key[i] - b._key[i];
+      return 0;
+    });
+    // 对称和弦（增三、减七……）：音完全一样、类型一样的合并成一项
+    var merged = [];
+    list.forEach(function (x) {
+      var first = merged.filter(function (y) { return y._same === x._same; })[0];
+      if (first) first.equivalents.push(x.symbol); else merged.push(x);
+    });
+    merged.forEach(function (x) { delete x._key; delete x._same; });
+    out.candidates = merged;
+    out.kind = merged.length ? 'chord' : (pcs.length === 2 ? 'interval' : 'unknown');
+    // 有识别结果时，音名按最可能的和弦拼写
+    if (merged.length) {
+      var best = chordNotes(merged[0].root, merged[0].chord);
+      played.forEach(function (n) { n.name = findByPc(best, n.pc).name; });
+      out.bass.name = findByPc(best, bassPc).name;
+      if (out.interval) { out.interval.low = findByPc(best, pcs[0]).name; out.interval.high = findByPc(best, pcs[1]).name; }
+    }
+    return out;
+  }
+
   // ---------------- 叠加：音阶 + 和弦 ----------------
   // 返回 { 音高(0～11): 该音在指板上怎么显示 }，没有的音高就不显示
   //   kind: 'scale'（只有音阶）/ 'chord'（和弦内音）/ 'muted'（叠加时的其他音阶音，淡色）
@@ -345,7 +486,11 @@
     diatonicChords: diatonicChords,
     diatonicMatch: diatonicMatch,
     simplifyNote: simplifyNote,
-    combine: combine
+    combine: combine,
+    DEFAULT_NAMES: DEFAULT_NAMES,
+    canOmit: canOmit,
+    shapeText: shapeText,
+    identifyChord: identifyChord
   };
 
   root.Theory = Theory;

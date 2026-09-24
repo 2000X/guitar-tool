@@ -198,3 +198,38 @@ header .sub { margin: 0; color: var(--muted); font-size: 13px; }
 .dia-empty { font-size: 13px; color: var(--muted); }
 .dia-keys { margin-left: auto; font-size: 12px; color: var(--muted); }
 .lg-roman { color: var(--muted); }
+
+/* ---------- v0.4 第 2 步：点选识别和弦 ---------- */
+.btn.toggle[aria-pressed="true"] { background: var(--id-on); border-color: var(--id-on); color: var(--id-on-text); }
+.identify {
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 16px; margin-bottom: 12px;
+}
+.identify[hidden] { display: none; }
+.id-head { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; }
+.id-shape { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.id-head .btn:disabled { opacity: 0.5; cursor: default; }
+.id-tip { margin-left: auto; font-size: 12px; color: var(--muted); }
+.id-result { display: flex; flex-direction: column; gap: 8px; min-height: 30px; }
+.id-msg { margin: 0; font-size: 14px; color: var(--muted); line-height: 30px; }
+.id-cands { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; }
+.id-cand {
+  font: inherit; color: var(--text); background: var(--bg); cursor: pointer;
+  border: 1px solid var(--line); border-radius: 8px; padding: 3px 10px;
+  display: inline-flex; align-items: baseline; gap: 6px;
+}
+.id-cand:hover { border-color: var(--muted); }
+.id-cand .id-text { font-size: 14px; font-weight: 600; }
+.id-cand .id-roman { font-size: 12px; color: var(--muted); font-weight: 600; }
+.id-cand.best { padding: 4px 14px; border-color: var(--text); }
+.id-cand.best .id-text { font-size: 20px; font-weight: 700; }
+.id-or { font-size: 12px; color: var(--muted); margin-left: 6px; }
+.id-detail { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; }
+.id-info { font-size: 13px; color: var(--muted); }
+.lg-note.missing b { background: transparent; color: var(--missing-mark); border: 2px dashed var(--missing-mark); }
+.dot.mark.role-none .body { fill: var(--mark); }
+.dot.mark.role-none text { fill: var(--mark-text); }
+.mute-x { fill: var(--mute-mark); font-size: 22px; font-weight: 600; pointer-events: none; font-family: inherit; }
+.identify-on .pos { cursor: pointer; }
+.identify-on .string-label { cursor: pointer; }
