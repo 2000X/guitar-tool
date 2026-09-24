@@ -105,6 +105,25 @@
     });
   }
 
+  // ---------- 界面缩放按钮 ----------
+  function buildZoom(box) {
+    var group = h('div', { class: 'segmented zoom-ctl', role: 'group', 'aria-label': '界面缩放' });
+    var minus = h('button', { type: 'button', id: 'zoom-out', title: '缩小', 'aria-label': '缩小', text: 'A−', onclick: function () { Theme.zoomOut(); } });
+    var val = h('button', { type: 'button', id: 'zoom-reset', title: '恢复 100%', onclick: function () { Theme.setZoom(1); } });
+    var plus = h('button', { type: 'button', id: 'zoom-in', title: '放大', 'aria-label': '放大', text: 'A+', onclick: function () { Theme.zoomIn(); } });
+    group.appendChild(minus); group.appendChild(val); group.appendChild(plus);
+    box.appendChild(group);
+    function sync() {
+      var z = Theme.getZoom();
+      val.textContent = Math.round(z * 100) + '%';
+      minus.disabled = z <= Theme.ZOOM_MIN + 1e-9;
+      plus.disabled = z >= Theme.ZOOM_MAX - 1e-9;
+    }
+    Theme.onChange(sync); sync();
+  }
+
+  var zoomBox = document.getElementById('zoom-ctl');
+  if (zoomBox) buildZoom(zoomBox);
   var modeBox = document.getElementById('mode-switch');
   if (modeBox) buildModeSwitch(modeBox);
   var btn = document.getElementById('color-btn'), panel = document.getElementById('color-panel');

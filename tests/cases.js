@@ -241,13 +241,15 @@
       var OPEN = { 1: 4, 2: 11, 3: 7, 4: 2, 5: 9, 6: 4 }; // E B G D A E
       var bad = [];
       for (var s = 1; s <= 6; s++) {
-        for (var f = 0; f <= T.FRET_COUNT; f++) {
+        for (var f = 0; f <= 24; f++) { // 按最多 24 品检查
           var expected = pc(CHROMATIC[(OPEN[s] + f) % 12]);
           if (T.pcAt(s, f) !== expected) bad.push(s + '弦' + f + '品');
-          if (f + 12 <= T.FRET_COUNT && T.pcAt(s, f + 12) !== T.pcAt(s, f)) bad.push(s + '弦' + f + '品与+12品不同');
+          if (f + 12 <= 24 && T.pcAt(s, f + 12) !== T.pcAt(s, f)) bad.push(s + '弦' + f + '品与+12品不同');
         }
       }
-      check(G, '6 弦 × 16 个位置全部正确，且隔 12 品同名', bad, []);
+      check(G, '6 弦 × 25 个位置（0～24 品）全部正确，且隔 12 品同名', bad, []);
+      check(G, '品数可选范围 12～24，默认 15', [T.MIN_FRETS, T.MAX_FRETS, T.FRET_COUNT], [12, 24, 15]);
+      check(G, '1 弦 24 品是 E（高两个八度）', [T.pcAt(1, 24), T.midiAt(1, 24) - T.midiAt(1, 0)], [4, 24]);
     });
 
     return results;

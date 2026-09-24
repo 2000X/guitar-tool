@@ -12,9 +12,10 @@
     <header>
       <div>
         <h1>吉他指板</h1>
-        <p class="sub">v0.1.1</p>
+        <p class="sub">v0.2 开发中：品数调整 + 界面大小</p>
       </div>
       <div class="toolbar">
+        <div id="zoom-ctl"></div>
         <div id="mode-switch"></div>
         <button type="button" class="btn" id="color-btn" aria-expanded="false" aria-controls="color-panel">调色</button>
       </div>
@@ -31,6 +32,10 @@
           <label class="field">根音 <select id="chord-root-select" aria-label="和弦根音"></select></label>
           <label class="field">类型 <select id="chord-select" aria-label="和弦类型"></select></label>
         </div>
+        <div class="ctl-group">
+          <span class="ctl-title">指板</span>
+          <label class="field">品数 <select id="fret-select" aria-label="品数"></select></label>
+        </div>
         <div class="field">显示
           <div class="segmented" id="label-mode" role="radiogroup" aria-label="圆点上显示什么">
             <button type="button" role="radio" data-label="name">音名</button>
@@ -40,7 +45,7 @@
         </div>
       </div>
       <div class="board-wrap">
-        <svg id="fretboard" role="img" aria-label="吉他指板，标准调弦，0 到 15 品"></svg>
+        <svg id="fretboard" role="img" aria-label="吉他指板，标准调弦"></svg>
       </div>
       <div class="legend" id="legend" hidden></div>
       <section id="color-panel" class="color-panel" hidden aria-label="调色面板"></section>

@@ -54,6 +54,8 @@
 
   var MODES = ['system', 'light', 'dark'];
   var KEY_MODE = 'guitarTool.themeMode';
+  var KEY_ZOOM = 'guitarTool.uiZoom';
+  var ZOOM_MIN = 0.7, ZOOM_MAX = 2.0, ZOOM_STEP = 0.1; // 界面缩放 70%～200%
   var KEY_COLORS = 'guitarTool.colorOverrides';
 
   // 浏览器存储：某些情况下（隐私模式等）会读写失败，失败就当作没有保存过
@@ -75,6 +77,17 @@
 
   var mode = readStore(KEY_MODE);
   if (MODES.indexOf(mode) < 0) mode = 'system';
+
+  // 界面缩放（只影响文字、按钮、图例；指板宽度跟随窗口）
+  function clampZoom(z) {
+    z = Math.round(z * 10) / 10;
+    return isFinite(z) ? Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) : 1;
+  }
+  var zoom = clampZoom(parseFloat(readStore(KEY_ZOOM) || '1'));
+  function applyZoom() {
+    var st = root.document.documentElement.style;
+    if (st && st.setProperty) st.setProperty('--ui-zoom', String(zoom));
+  }
 
   var listeners = [];
   function notify() { listeners.forEach(function (fn) { fn(); }); }
@@ -154,7 +167,12 @@
       lines.push('JSON：' + JSON.stringify(overrides));
       return lines.join('\n');
     },
-    onChange: function (fn) { listeners.push(fn); }
+    onChange: function (fn) { listeners.push(fn); },
+    ZOOM_MIN: ZOOM_MIN, ZOOM_MAX: ZOOM_MAX,
+    getZoom: function () { return zoom; },
+    setZoom: function (z) { zoom = clampZoom(z); writeStore(KEY_ZOOM, zoom === 1 ? null : String(zoom)); applyZoom(); notify(); },
+    zoomIn: function () { Theme.setZoom(zoom + ZOOM_STEP); },
+    zoomOut: function () { Theme.setZoom(zoom - ZOOM_STEP); }
   };
 
   // 系统深浅色变化时，“跟随系统”模式下要通知界面刷新
@@ -164,5 +182,6 @@
   }
 
   apply();
+  applyZoom();
   root.Theme = Theme;
 })(window);

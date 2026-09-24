@@ -23,7 +23,8 @@
     { string: 6, name: 'E', midi: 40 }
   ];
 
-  var FRET_COUNT = 15; // 显示 0～15 品
+  var FRET_COUNT = 15; // 默认显示 0～15 品
+  var MIN_FRETS = 12, MAX_FRETS = 24; // 品数可在 12～24 之间调整
 
   function mod12(n) { return ((n % 12) + 12) % 12; }
 
@@ -215,6 +216,8 @@
     ACCIDENTALS: ACCIDENTALS,
     STANDARD_TUNING: STANDARD_TUNING,
     FRET_COUNT: FRET_COUNT,
+    MIN_FRETS: MIN_FRETS,
+    MAX_FRETS: MAX_FRETS,
     mod12: mod12,
     parseNote: parseNote,
     openString: openString,

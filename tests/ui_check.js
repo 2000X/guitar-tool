@@ -387,6 +387,104 @@ const def = (scheme, key) => themeItems.find(i => i.key === key)[scheme];
     await context.close();
   }
 
+  // ---------- v0.2：品数 12～24 ----------
+  {
+    const { context, page, errors } = await openPage('index.html', { colorScheme: 'light', viewport: { width: 1400, height: 820 } });
+    const OPEN = { 1: 4, 2: 11, 3: 7, 4: 2, 5: 9, 6: 4 };
+    const board = () => page.evaluate(() => {
+      const svg = document.getElementById('fretboard');
+      const xs = [...document.querySelectorAll('.fret')].map(l => +l.getAttribute('x1'));
+      const nut = +document.querySelector('.nut').getAttribute('x') + 3;
+      const widths = xs.map((x, i) => x - (i ? xs[i - 1] : nut));
+      return {
+        frets: +svg.dataset.frets, pos: document.querySelectorAll('.pos').length, fretLines: xs.length,
+        inlays: [...document.querySelectorAll('.inlay')].map(c => +c.dataset.fret).sort((a, b) => a - b),
+        nums: [...document.querySelectorAll('.fret-num')].map(t => +t.textContent),
+        minSlot: Math.min(...widths), dots: document.querySelectorAll('.dot').length,
+        pcAt: (s, f) => null,
+        pc_1_24: (document.querySelector('.pos[data-string="1"][data-fret="24"]') || {}).dataset?.pc,
+        overflowX: document.documentElement.scrollWidth > window.innerWidth,
+        wrapScrolls: (w => w.scrollWidth > w.clientWidth + 1)(document.querySelector('.board-wrap'))
+      };
+    });
+    const opts = await page.$$eval('#fret-select option', os => os.map(o => +o.value));
+    check('品数下拉有 12～24 共 13 项', JSON.stringify(opts) === JSON.stringify([...Array(13).keys()].map(i => i + 12)), opts);
+    check('默认 15 品', await page.inputValue('#fret-select') === '15');
+    const countScale = (pcs, N) => { let c = 0; for (let s = 1; s <= 6; s++) for (let f = 0; f <= N; f++) if (pcs.includes((OPEN[s] + f) % 12)) c++; return c; };
+    const C_MAJOR = [0, 2, 4, 5, 7, 9, 11];
+    const EXPECT_INLAYS = { 12: [3, 5, 7, 9, 12, 12], 15: [3, 5, 7, 9, 12, 12, 15], 19: [3, 5, 7, 9, 12, 12, 15, 17, 19],
+      22: [3, 5, 7, 9, 12, 12, 15, 17, 19, 21], 24: [3, 5, 7, 9, 12, 12, 15, 17, 19, 21, 24, 24] };
+    for (const N of [12, 19, 22, 24]) {
+      await page.selectOption('#fret-select', String(N));
+      const b = await board();
+      check(`${N} 品：位置数 = 6 × ${N + 1}，品丝 ${N} 根，品号 0～${N}`,
+        b.frets === N && b.pos === 6 * (N + 1) && b.fretLines === N && b.nums.join() === [...Array(N + 1).keys()].join(), b);
+      check(`${N} 品：品位点正确`, JSON.stringify(b.inlays) === JSON.stringify(EXPECT_INLAYS[N]), b.inlays);
+      check(`${N} 品：最窄的品格也放得下带圈的圆点（≥ 40）`, b.minSlot >= 40, b.minSlot.toFixed(1));
+      check(`${N} 品：C 大调圆点数量正确`, b.dots === countScale(C_MAJOR, N), b.dots);
+      check(`${N} 品：页面没有横向滚动条（1400 宽）`, !b.overflowX);
+      check(`${N} 品：1400 宽窗口里指板完整显示，不用左右拖`, !b.wrapScrolls);
+      if (N === 24) {
+        check('24 品：1 弦 24 品是 E', b.pc_1_24 === '4', b.pc_1_24);
+        await page.selectOption('#chord-root-select', 'G');
+        await page.selectOption('#chord-select', '7');
+        await page.screenshot({ path: path.join(outDir, 'v02_24frets_light.png') });
+        await page.selectOption('#chord-select', 'none');
+      }
+    }
+    await page.reload();
+    check('刷新后记住品数（24）', await page.inputValue('#fret-select') === '24' && (await board()).frets === 24);
+    await page.selectOption('#fret-select', '12');
+    await page.screenshot({ path: path.join(outDir, 'v02_12frets_light.png') });
+    check('页面无报错（品数）', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
+  // ---------- v0.2：自适应宽度 + 界面缩放 ----------
+  {
+    const { context, page, errors } = await openPage('index.html', { colorScheme: 'light', viewport: { width: 2400, height: 1300 }, deviceScaleFactor: 1 });
+    const boardW = () => page.evaluate(() => document.getElementById('fretboard').getBoundingClientRect().width);
+    const w = await boardW();
+    check('大屏（2400 宽）：指板宽度跟随窗口，超过 2000 像素', w > 2000, Math.round(w));
+    const h1 = () => page.evaluate(() => document.querySelector('header h1').getBoundingClientRect().height);
+    const h0 = await h1();
+    check('缩放按钮默认显示 100%', (await page.textContent('#zoom-reset')) === '100%');
+    await page.click('#zoom-in'); await page.click('#zoom-in');
+    check('点两次 A+ → 120%', (await page.textContent('#zoom-reset')) === '120%');
+    const h2 = await h1();
+    check('放大后标题文字变大（约 1.2 倍）', h2 / h0 > 1.15 && h2 / h0 < 1.25, (h2 / h0).toFixed(3));
+    const w2 = await boardW();
+    // 页面四周留白会随缩放变大，所以允许 2% 以内的差距
+    check('放大后指板宽度基本不变（差距 < 2%，不超出窗口）', Math.abs(w2 - w) / w < 0.02 && w2 <= 2400, [Math.round(w), Math.round(w2)]);
+    const bh = await page.evaluate(() => document.getElementById('fretboard').getBoundingClientRect().height);
+    check('指板高度不超过窗口高度的 78%', bh <= 1300 * 0.78 + 1, Math.round(bh));
+    await page.reload();
+    check('刷新后记住缩放 120%', (await page.textContent('#zoom-reset')) === '120%');
+    await page.screenshot({ path: path.join(outDir, 'v02_2400_zoom120.png') });
+    for (let i = 0; i < 20; i++) await page.click('#zoom-out', { force: true }).catch(() => {});
+    check('缩小到下限 70% 后 A− 变灰不可点', (await page.textContent('#zoom-reset')) === '70%' && await page.isDisabled('#zoom-out'));
+    await page.click('#zoom-reset');
+    check('点中间的百分比 → 恢复 100%', (await page.textContent('#zoom-reset')) === '100%');
+    for (let i = 0; i < 20; i++) await page.click('#zoom-in', { force: true }).catch(() => {});
+    check('放大到上限 200% 后 A+ 变灰不可点', (await page.textContent('#zoom-reset')) === '200%' && await page.isDisabled('#zoom-in'));
+    check('页面无报错（缩放）', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    // 手机宽度：页面本身不能左右晃，指板在自己的框里左右滑动
+    const { context, page, errors } = await openPage('index.html', { colorScheme: 'dark', viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+    const info = await page.evaluate(() => {
+      const wrap = document.querySelector('.board-wrap');
+      return { pageOverflow: document.documentElement.scrollWidth > window.innerWidth,
+        wrapScrolls: wrap.scrollWidth > wrap.clientWidth };
+    });
+    check('手机宽度（390）：页面整体没有横向滚动', !info.pageOverflow, info);
+    check('手机宽度：指板可以在框内左右滑动', info.wrapScrolls, info);
+    await page.screenshot({ path: path.join(outDir, 'v02_phone_dark.png'), fullPage: true });
+    check('页面无报错（手机宽度）', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
   // ---------- 自检页 ----------
   {
     const { context, page, errors } = await openPage('自检.html', { viewport: { width: 1000, height: 900 } });

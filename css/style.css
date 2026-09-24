@@ -12,7 +12,8 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   line-height: 1.5;
 }
-.page { max-width: 1320px; margin: 0 auto; padding: 28px 16px 40px; }
+/* 页面宽度跟随窗口（大显示器上最宽 2200 像素）；zoom 是右上角“A− / A+”的界面缩放 */
+.page { max-width: calc(2200px / var(--ui-zoom, 1)); margin: 0 auto; padding: 28px clamp(16px, 3vw, 40px) 40px; zoom: var(--ui-zoom, 1); }
 
 /* 页头：左边标题，右边工具按钮 */
 header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
@@ -40,7 +41,9 @@ header .sub { margin: 0; color: var(--muted); font-size: 13px; }
   padding: 12px 8px;
   overflow-x: auto;
 }
-#fretboard { display: block; width: 100%; min-width: 960px; height: auto; }
+/* 指板宽度占满，最高不超过窗口高度的 78%（除以缩放倍数，抵消 zoom 的影响）；
+   最小宽度由程序按品数设置，窗口更窄时可左右滑动 */
+#fretboard { display: block; width: 100%; height: auto; max-height: calc(78vh / var(--ui-zoom, 1)); }
 
 /* 指板各部分 */
 .board { fill: var(--board); stroke: var(--board-edge); stroke-width: 1; }
@@ -144,7 +147,7 @@ header .sub { margin: 0; color: var(--muted); font-size: 13px; }
 .lg-key.role-other i   { background: var(--deg-other); }
 
 /* ---------- 第 3 步：和弦叠加 ---------- */
-.ctl-group { display: flex; align-items: center; gap: 10px; padding-right: 20px; border-right: 1px solid var(--line); }
+.ctl-group { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; padding-right: 20px; border-right: 1px solid var(--line); }
 .ctl-title { font-size: 13px; font-weight: 650; color: var(--text); }
 .dot.kind-muted .body { fill: var(--scale-muted); }
 .dot.kind-muted text { fill: var(--scale-muted-text); font-weight: 500; font-size: 12px; }
@@ -160,3 +163,11 @@ header .sub { margin: 0; color: var(--muted); font-size: 13px; }
 .lg-key.kind-muted i { background: var(--scale-muted); }
 .lg-key.scale-root i { background: transparent; border: 2px solid var(--scale-root-ring); }
 .lg-key.outside i { background: transparent; border: 2px dashed var(--outside-mark); }
+
+/* ---------- v0.2：界面缩放按钮、窄屏 ---------- */
+.zoom-ctl button { min-width: 38px; font-variant-numeric: tabular-nums; }
+.zoom-ctl button:disabled { color: var(--muted); cursor: default; opacity: 0.5; }
+@media (max-width: 640px) {
+  .ctl-group { border-right: 0; padding-right: 0; }
+  header h1 { font-size: 20px; }
+}

@@ -17,15 +17,24 @@
     edge: 22        // 指板上下边缘超出最外侧弦的距离
   };
   L.nutX = L.labelW + L.openW;
-  L.endX = L.width - L.right;
   L.bottomString = L.top + L.stringGap * 5;
   L.numY = L.bottomString + L.edge + 22;
   L.height = L.numY + 12;
 
+  var frets = T.FRET_COUNT; // 当前显示的品数（由选择栏决定）
+
+  // 按品数重新计算宽度：15 品及以下宽度不变（品格更宽）；
+  // 超过 15 品时每多一品加宽 75，保证高把位最窄的品格也放得下圆点
+  function setLayout(n) {
+    frets = n;
+    L.width = 1240 + Math.max(0, n - 15) * 75;
+    L.endX = L.width - L.right;
+  }
+
   // 品丝位置：真实吉他越往高把位品格越窄。这里取“真实比例 60% + 等宽 40%”，
   // 既有真实感，高把位又不会挤得太窄
   function fretX(n) {
-    var N = T.FRET_COUNT;
+    var N = frets;
     var real = (1 - Math.pow(2, -n / 12)) / (1 - Math.pow(2, -N / 12));
     var t = 0.6 * real + 0.4 * (n / N);
     return L.nutX + t * (L.endX - L.nutX);
@@ -43,13 +52,19 @@
     return node;
   }
 
-  var SINGLE_INLAYS = [3, 5, 7, 9, 15];
-  var DOUBLE_INLAYS = [12];
+  var SINGLE_INLAYS = [3, 5, 7, 9, 15, 17, 19, 21];
+  var DOUBLE_INLAYS = [12, 24];
+  var within = function (f) { return f <= frets; };
   var STRING_WIDTHS = { 1: 1.1, 2: 1.4, 3: 1.8, 4: 2.3, 5: 2.8, 6: 3.3 };
 
   function draw() {
+    setLayout(state.frets);
     var svg = document.getElementById('fretboard');
     svg.setAttribute('viewBox', '0 0 ' + L.width + ' ' + L.height);
+    svg.setAttribute('data-frets', frets);
+    // 窗口太窄时不再继续缩小，改为左右滑动。
+    // 最小宽度：至少 960；品数多时按比例稍放宽（24 品约 1150），普通电脑窗口里仍能完整显示
+    svg.style.minWidth = Math.round(Math.max(960, L.width * 0.6)) + 'px';
     svg.innerHTML = '';
 
     var yTop = L.top - L.edge, yBottom = L.bottomString + L.edge;
@@ -60,18 +75,18 @@
     // 品位点：单点在 3、4 弦之间；12 品双点在 2、3 弦和 4、5 弦之间
     var inlays = el('g', { class: 'inlays' }, svg);
     var midY = (stringY(3) + stringY(4)) / 2;
-    SINGLE_INLAYS.forEach(function (f) {
+    SINGLE_INLAYS.filter(within).forEach(function (f) {
       el('circle', { class: 'inlay', cx: slotX(f), cy: midY, r: 7, 'data-fret': f }, inlays);
     });
-    DOUBLE_INLAYS.forEach(function (f) {
+    DOUBLE_INLAYS.filter(within).forEach(function (f) {
       el('circle', { class: 'inlay', cx: slotX(f), cy: (stringY(2) + stringY(3)) / 2, r: 7, 'data-fret': f }, inlays);
       el('circle', { class: 'inlay', cx: slotX(f), cy: (stringY(4) + stringY(5)) / 2, r: 7, 'data-fret': f }, inlays);
     });
 
     // 品丝和琴枕
-    var frets = el('g', { class: 'frets' }, svg);
-    for (var n = 1; n <= T.FRET_COUNT; n++) {
-      el('line', { class: 'fret', x1: fretX(n), y1: yTop, x2: fretX(n), y2: yBottom, 'data-fret': n }, frets);
+    var fretGroup = el('g', { class: 'frets' }, svg); // 注意：不能叫 frets，会和“品数”变量重名
+    for (var n = 1; n <= frets; n++) {
+      el('line', { class: 'fret', x1: fretX(n), y1: yTop, x2: fretX(n), y2: yBottom, 'data-fret': n }, fretGroup);
     }
     el('rect', { class: 'nut', x: L.nutX - 3, y: yTop, width: 6, height: yBottom - yTop, rx: 1.5 }, svg);
 
@@ -88,7 +103,7 @@
 
     // 品号
     var nums = el('g', { class: 'fret-nums' }, svg);
-    for (var f = 0; f <= T.FRET_COUNT; f++) {
+    for (var f = 0; f <= frets; f++) {
       var marked = SINGLE_INLAYS.concat(DOUBLE_INLAYS).indexOf(f) >= 0;
       var txt = el('text', { class: 'fret-num' + (marked ? ' marked' : ''), x: slotX(f), y: L.numY,
         'text-anchor': 'middle', 'data-fret': f }, nums);
@@ -98,7 +113,7 @@
     // 每个位置一个占位点（以后音阶、和弦的彩色圆点就画在这里）
     var positions = el('g', { class: 'positions' }, svg);
     T.STANDARD_TUNING.forEach(function (t) {
-      for (var f = 0; f <= T.FRET_COUNT; f++) {
+      for (var f = 0; f <= frets; f++) {
         var g = el('g', { class: 'pos', 'data-string': t.string, 'data-fret': f,
           'data-pc': T.pcAt(t.string, f), 'data-midi': T.midiAt(t.string, f),
           transform: 'translate(' + slotX(f).toFixed(2) + ',' + stringY(t.string) + ')' }, positions);
@@ -112,7 +127,7 @@
 
   var ROLE_NAMES = { root: '根音', third: '三音', fifth: '五音', seventh: '七音', other: '其他' };
   var KEY_VIEW = 'guitarTool.viewState';
-  var DEFAULT_STATE = { root: 'C', scale: 'major', chordRoot: 'C', chord: 'none', label: 'name' };
+  var DEFAULT_STATE = { root: 'C', scale: 'major', chordRoot: 'C', chord: 'none', label: 'name', frets: T.FRET_COUNT };
 
   // 读取上次的设置（读不到或不合法就用默认值）
   function loadState() {
@@ -124,7 +139,8 @@
       scale: st.scale === 'none' || T.SCALES.some(function (x) { return x.id === st.scale; }) ? st.scale : DEFAULT_STATE.scale,
       chordRoot: okRoot(st.chordRoot) ? st.chordRoot : DEFAULT_STATE.chordRoot,
       chord: st.chord === 'none' || T.CHORDS.some(function (x) { return x.id === st.chord; }) ? st.chord : DEFAULT_STATE.chord,
-      label: ['name', 'degree', 'interval'].indexOf(st.label) >= 0 ? st.label : DEFAULT_STATE.label
+      label: ['name', 'degree', 'interval'].indexOf(st.label) >= 0 ? st.label : DEFAULT_STATE.label,
+      frets: st.frets >= T.MIN_FRETS && st.frets <= T.MAX_FRETS && st.frets % 1 === 0 ? st.frets : DEFAULT_STATE.frets
     };
   }
   function saveState() {
@@ -217,6 +233,14 @@
     bind('scale-select', 'scale', T.SCALES.map(function (x) { return [x.id, x.name]; }), true);
     bind('chord-root-select', 'chordRoot', roots, false);
     bind('chord-select', 'chord', T.CHORDS.map(function (x) { return [x.id, x.name + '（' + (x.symbol || '大三') + '）']; }), true);
+
+    // 品数：改了要重画整个指板
+    var fretSel = document.getElementById('fret-select');
+    for (var n = T.MIN_FRETS; n <= T.MAX_FRETS; n++) {
+      var op = document.createElement('option'); op.value = n; op.textContent = n + ' 品'; fretSel.appendChild(op);
+    }
+    fretSel.value = String(state.frets);
+    fretSel.addEventListener('change', function () { state.frets = +fretSel.value; saveState(); draw(); renderDots(); });
 
     var seg = document.getElementById('label-mode');
     function syncSeg() {
