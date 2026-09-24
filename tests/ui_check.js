@@ -34,6 +34,20 @@ for (const f of ['css/style.css', 'index.html', '自检.html']) {
 const badHex = themeItems.filter(i => !/^#[0-9a-f]{6}$/.test(i.light) || !/^#[0-9a-f]{6}$/.test(i.dark));
 check('theme.js 每项都有浅色、深色两个 6 位色值', badHex.length === 0, badHex.map(i => i.key).join(', '));
 
+// ---------- v0.4.2：本地 js/css 引用带版本号（防止浏览器用旧的缓存文件） ----------
+{
+  const idx = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const m = /<p class="sub">v(\d+(?:\.\d+)+)/.exec(idx);
+  const ver = m && m[1];
+  check('index.html 副标题里能读到版本号', !!ver, ver);
+  for (const f of ['index.html', '自检.html']) {
+    const src = fs.readFileSync(path.join(root, f), 'utf8');
+    const refs = [...src.matchAll(/(?:src|href)="([^"]+)"/g)].map(x => x[1]).filter(u => !/^(https?:|#|mailto:)/.test(u));
+    const bad = refs.filter(u => !u.endsWith('?v=' + ver));
+    check(`${f}：引用的 js/css 都带当前版本号 ?v=${ver}（发布新版时浏览器会立刻拿新文件）`, !!ver && refs.length >= 5 && bad.length === 0, bad.join(', '));
+  }
+}
+
 const hexToRgb = h => `rgb(${parseInt(h.slice(1, 3), 16)}, ${parseInt(h.slice(3, 5), 16)}, ${parseInt(h.slice(5, 7), 16)})`;
 const def = (scheme, key) => themeItems.find(i => i.key === key)[scheme];
 
