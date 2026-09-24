@@ -233,3 +233,13 @@ header .sub { margin: 0; color: var(--muted); font-size: 13px; }
 .mute-x { fill: var(--mute-mark); font-size: 22px; font-weight: 600; pointer-events: none; font-family: inherit; }
 .identify-on .pos { cursor: pointer; }
 .identify-on .string-label { cursor: pointer; }
+
+/* ---------- v0.4.1：识别时显示和弦音的其他位置 ---------- */
+.dot.ghost .body { fill: var(--id-other); }
+.dot.ghost text { fill: var(--id-other-text); }
+.dot.ghost.omit .body { fill: var(--id-omit); stroke: var(--missing-mark); stroke-width: 1.5; stroke-dasharray: 3 2.5; }
+.dot.ghost.omit text { fill: var(--id-omit-text); font-weight: 500; font-size: 11px; }
+.dot.ghost.omit.small text { font-size: 9.5px; }
+.id-keys { margin-left: auto; }
+.lg-key.ghost i { background: var(--id-other); }
+.lg-key.ghost.omit i { background: var(--id-omit); border: 1.5px dashed var(--missing-mark); }

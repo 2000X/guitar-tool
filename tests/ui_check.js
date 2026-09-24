@@ -790,8 +790,9 @@ const def = (scheme, key) => themeItems.find(i => i.key === key)[scheme];
   {
     const { context, page, errors } = await openPage('index.html', { colorScheme: 'light', viewport: { width: 1400, height: 900 } });
     const tap = (s, f) => page.click(`#fretboard .pos[data-string="${s}"][data-fret="${f}"]`);
-    const marks = () => page.evaluate(() => [...document.querySelectorAll('.pos')].filter(g => g.querySelector('.dot')).map(g => {
-      const d = g.querySelector('.dot');
+    // v0.4.1 起识别时还有灰色的“其他位置”圆点，这里只数标记（.dot.mark）
+    const marks = () => page.evaluate(() => [...document.querySelectorAll('.pos')].filter(g => g.querySelector('.dot.mark')).map(g => {
+      const d = g.querySelector('.dot.mark');
       return { s: +g.dataset.string, f: +g.dataset.fret, text: d.querySelector('text').textContent, kind: d.dataset.kind,
         role: d.dataset.role, fill: getComputedStyle(d.querySelector('.body')).fill };
     }));
@@ -916,6 +917,90 @@ const def = (scheme, key) => themeItems.find(i => i.key === key)[scheme];
     await page.setViewportSize({ width: 390, height: 844 });
     await page.screenshot({ path: path.join(outDir, 'v04b_phone_dark.png'), fullPage: true });
     check('页面无报错（识别和弦 深色）', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+
+  // ---------- v0.4.1：识别时显示和弦音的其他位置 ----------
+  {
+    const { context, page, errors } = await openPage('index.html', { colorScheme: 'light', viewport: { width: 1400, height: 900 } });
+    const tap = (s, f) => page.click(`#fretboard .pos[data-string="${s}"][data-fret="${f}"]`);
+    const all = () => page.evaluate(() => [...document.querySelectorAll('.pos')].filter(g => g.querySelector('.dot')).map(g => {
+      const d = g.querySelector('.dot');
+      return { s: +g.dataset.string, f: +g.dataset.fret, pc: +g.dataset.pc, text: d.querySelector('text').textContent, kind: d.dataset.kind,
+        fill: getComputedStyle(d.querySelector('.body')).fill, dash: getComputedStyle(d.querySelector('.body')).strokeDasharray };
+    }));
+    const at = (list, s, f) => list.find(d => d.s === s && d.f === f);
+    const RGB = k => hexToRgb(def('light', k));
+    // 独立计算：标准调弦 0～15 品里，音高属于某个集合的位置数
+    const OPEN = { 1: 4, 2: 11, 3: 7, 4: 2, 5: 9, 6: 4 };
+    const countPcs = (set, exclude) => { let n = 0; for (let s = 1; s <= 6; s++) for (let f = 0; f <= 15; f++) if (set.includes((OPEN[s] + f) % 12) && !exclude.some(([a, b]) => a === s && b === f)) n++; return n; };
+
+    await page.click('#identify-btn');
+    check('“显示其他位置”开关默认打开', await page.getAttribute('#id-others-btn', 'aria-pressed') === 'true');
+    check('没有标记时指板上没有任何圆点', (await all()).length === 0);
+    const X = [[5, 3], [4, 2], [3, 3], [2, 5], [1, 5]];
+    for (const [s, f] of X) await tap(s, f);
+    let d = await all();
+    const ghosts = d.filter(x => x.kind === 'ghost'), omits = d.filter(x => x.kind === 'ghost-omit');
+    // C13(no5, no9)：按到 C E B♭ A（0 4 10 9），没按到 G D（7 2）
+    check('x32355：按到的音（C E B♭ A）在其他位置用灰色实心显示，数量正确（不弹的 6 弦空弦 E 除外）', ghosts.length === countPcs([0, 4, 10, 9], X.concat([[6, 0]])) && ghosts.every(x => [0, 4, 10, 9].includes(x.pc) && x.fill === RGB('id-other')),
+      [ghosts.length, countPcs([0, 4, 10, 9], X.concat([[6, 0]]))]);
+    check('x32355：没按到的音（G D）用淡色虚线圆显示，数量正确', omits.length === countPcs([7, 2], []) && omits.every(x => [7, 2].includes(x.pc) && x.fill === RGB('id-omit') && x.dash !== 'none'),
+      [omits.length, countPcs([7, 2], []), omits[0]]);
+    check('标记的位置仍是彩色标记，不被灰色盖掉（该位置只有一个圆点）', X.every(([s, f]) => at(d, s, f)?.kind === 'mark')
+      && await page.evaluate(X => X.every(([s, f]) => document.querySelectorAll(`.pos[data-string="${s}"][data-fret="${f}"] .dot`).length === 1), X));
+    check('不弹的 6 弦：空弦位置只有 ×，不画灰色 E（避免重叠）', !at(d, 6, 0) && await page.locator('#mute-marks .mute-x[data-string="6"]').count() === 1);
+    check('标记了的弦，空弦位置照常显示：3 弦空弦 G 淡色虚线', at(d, 3, 0)?.kind === 'ghost-omit');
+    check('6 弦 8 品 C 灰色、6 弦 3 品 G 淡色虚线', at(d, 6, 8)?.kind === 'ghost' && at(d, 6, 8)?.text === 'C' && at(d, 6, 3)?.kind === 'ghost-omit' && at(d, 6, 3)?.text === 'G');
+    check('识别面板有两个图例：“这个和弦的音在其他位置”“没按到的音”', await page.locator('#id-keys .lg-key').count() === 2);
+    await page.screenshot({ path: path.join(outDir, 'v041_x32355_name_light.png') });
+    await page.click('#label-mode [data-label="degree"]');
+    d = await all();
+    check('音级模式：灰色圆点也显示音级（6 弦 8 品 1、6 弦 3 品 5、6 弦 5 品 13）', at(d, 6, 8)?.text === '1' && at(d, 6, 3)?.text === '5' && at(d, 6, 5)?.text === '13');
+    await page.screenshot({ path: path.join(outDir, 'v041_x32355_degree_light.png') });
+
+    // 开关
+    await page.click('#id-others-btn');
+    d = await all();
+    check('关掉“显示其他位置”→ 只剩 5 个标记，图例消失', d.length === 5 && d.every(x => x.kind === 'mark') && await page.locator('#id-keys').count() === 0
+      && await page.getAttribute('#id-others-btn', 'aria-pressed') === 'false');
+    await page.reload();
+    check('刷新后记住“显示其他位置”关闭', await page.getAttribute('#id-others-btn', 'aria-pressed') === 'false' && (await all()).length === 5);
+    await page.click('#id-others-btn');
+    check('再打开 → 灰色圆点回来', (await all()).some(x => x.kind === 'ghost'));
+
+    // 不缺音的和弦：没有淡色虚线圆
+    await page.click('#id-clear');
+    await page.click('#label-mode [data-label="name"]');
+    for (const [s, f] of [[5, 3], [4, 2], [3, 0], [2, 1], [1, 0]]) await tap(s, f);
+    d = await all();
+    check('x32010（C）：没有淡色虚线圆，灰色圆点只有 C E G', !d.some(x => x.kind === 'ghost-omit') && d.filter(x => x.kind === 'ghost').every(x => [0, 4, 7].includes(x.pc))
+      && await page.locator('#id-keys .lg-key').count() === 1);
+    // 点灰色圆点 = 在那根弦上做标记（替换）
+    await tap(5, 10);
+    d = await all();
+    check('点灰色圆点 → 变成标记（5 弦 3 品换到 10 品 G）', at(d, 5, 10)?.kind === 'mark' && at(d, 5, 3)?.kind === 'ghost');
+    // 认不出来：没有灰色圆点
+    await page.click('#id-clear');
+    for (const [s, f] of [[5, 3], [4, 0], [3, 6]]) await tap(s, f);
+    check('认不出来时没有灰色圆点', (await all()).every(x => x.kind === 'mark'));
+    // 关闭识别后不残留
+    await page.keyboard.press('Escape');
+    check('关闭识别后没有灰色圆点残留', !(await all()).some(x => x.kind.startsWith('ghost')));
+
+    await page.click('#color-btn');
+    check('调色面板有“其他位置的和弦音”“没按到的和弦音”', await page.locator('.cp-item[data-key="id-other"], .cp-item[data-key="id-omit"]').count() === 2);
+    await page.click('#cp-close');
+    check('页面无报错（v0.4.1）', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    const { context, page, errors } = await openPage('index.html', { colorScheme: 'dark', viewport: { width: 1400, height: 900 } });
+    const tap = (s, f) => page.click(`#fretboard .pos[data-string="${s}"][data-fret="${f}"]`);
+    await page.click('#identify-btn');
+    for (const [s, f] of [[5, 3], [4, 2], [3, 3], [2, 5], [1, 5]]) await tap(s, f);
+    await page.screenshot({ path: path.join(outDir, 'v041_x32355_dark.png') });
+    check('页面无报错（v0.4.1 深色）', errors.length === 0, errors.join(' | '));
     await context.close();
   }
 

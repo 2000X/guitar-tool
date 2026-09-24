@@ -12,7 +12,7 @@
     <header>
       <div>
         <h1>吉他指板</h1>
-        <p class="sub">v0.4</p>
+        <p class="sub">v0.4.1 开发中：识别和弦时显示其他位置</p>
       </div>
       <div class="toolbar">
         <div id="zoom-ctl"></div>
@@ -66,6 +66,7 @@
           <span class="ctl-title">识别和弦</span>
           <span class="id-shape" id="id-shape"></span>
           <button type="button" class="btn" id="id-clear">清除标记</button>
+          <button type="button" class="btn toggle" id="id-others-btn" aria-pressed="true">显示其他位置</button>
           <span class="id-tip">点指板做标记，每根弦最多一个音（再点取消）· 点弦名 = 不弹 · 点识别结果 = 在指板上显示这个和弦 · Esc 退出</span>
         </div>
         <div class="id-result" id="id-result"></div>

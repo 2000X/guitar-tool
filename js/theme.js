@@ -55,6 +55,10 @@
       { key: 'mark-text',   label: '标记圆点上的文字',         light: '#ffffff', dark: '#1d2024' },
       { key: 'mute-mark',   label: '不弹的弦（×）',            light: '#a14a44', dark: '#e0736c' },
       { key: 'missing-mark', label: '没按到的和弦音（虚线框）', light: '#8b929a', dark: '#6e757e' },
+      { key: 'id-other',    label: '其他位置的和弦音（灰色实心）', light: '#8b929a', dark: '#5c636c' },
+      { key: 'id-other-text', label: '其他位置圆点上的文字',     light: '#ffffff', dark: '#ffffff' },
+      { key: 'id-omit',     label: '没按到的和弦音（其他位置，淡色底）', light: '#ece7de', dark: '#2a2e33' },
+      { key: 'id-omit-text', label: '没按到的和弦音上的文字',   light: '#8b929a', dark: '#7d848c' },
       { key: 'id-on',       label: '“识别和弦”开关打开时的底色', light: '#1f9d6b', dark: '#35b983' },
       { key: 'id-on-text',  label: '“识别和弦”开关打开时的文字', light: '#ffffff', dark: '#15171a' }
     ]},

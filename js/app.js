@@ -128,7 +128,7 @@
   var ROLE_NAMES = { root: '根音', third: '三音', fifth: '五音', seventh: '七音', ext: '延伸音', other: '其他' };
   var KEY_VIEW = 'guitarTool.viewState';
   var DEFAULT_STATE = { root: 'C', scale: 'major', chordRoot: 'C', chord: 'none', label: 'name', frets: T.FRET_COUNT, diatonicSize: 3,
-    identify: false, marks: {} };
+    identify: false, marks: {}, idOthers: true };
 
   // 读取上次的设置（读不到或不合法就用默认值）
   function loadState() {
@@ -149,7 +149,8 @@
       frets: st.frets >= T.MIN_FRETS && st.frets <= T.MAX_FRETS && st.frets % 1 === 0 ? st.frets : DEFAULT_STATE.frets,
       diatonicSize: st.diatonicSize === 4 ? 4 : 3,
       identify: st.identify === true,
-      marks: loadMarks(st.marks)
+      marks: loadMarks(st.marks),
+      idOthers: st.idOthers !== false
     };
   }
   // 识别和弦的标记：{ 弦号: 品 }，每根弦最多一个；不合法的丢掉
@@ -316,6 +317,23 @@
       el('circle', { class: 'body', r: 15 }, dot);
       el('text', { 'text-anchor': 'middle', 'dominant-baseline': 'central', y: 0.5 }, dot).textContent = text;
     });
+    // v0.4.1：整个指板上这个和弦的其他位置——按到的音用灰色实心，没按到的音用更淡的虚线圆
+    if (state.idOthers && best) {
+      document.querySelectorAll('#fretboard .pos').forEach(function (g) {
+        var s = +g.getAttribute('data-string'), f = +g.getAttribute('data-fret');
+        if (state.marks[s] === f) return;
+        if (f === 0 && state.marks[s] === undefined) return; // 不弹的弦，空弦位置留给 ×
+        var n = T.findByPc(bestNotes, +g.getAttribute('data-pc'));
+        if (!n) return;
+        var omit = best.missing.indexOf(n.degree) >= 0;
+        var text = labelOf(n);
+        var dot = el('g', { class: 'dot ghost' + (omit ? ' omit' : '') + (text.length > 2 ? ' small' : ''),
+          'data-kind': omit ? 'ghost-omit' : 'ghost', 'data-name': n.name, 'data-degree': n.degree,
+          'data-interval': n.interval, 'data-role': n.role }, g);
+        el('circle', { class: 'body', r: omit ? 12 : 15 }, dot);
+        el('text', { 'text-anchor': 'middle', 'dominant-baseline': 'central', y: 0.5 }, dot).textContent = text;
+      });
+    }
     // 没标记的弦：空弦位置画 ×
     var mutes = el('g', { class: 'mute-marks', id: 'mute-marks' }, svg);
     T.STANDARD_TUNING.forEach(function (t) {
@@ -332,6 +350,7 @@
     var panel = document.getElementById('identify');
     var btn = document.getElementById('identify-btn');
     btn.setAttribute('aria-pressed', state.identify ? 'true' : 'false');
+    document.getElementById('id-others-btn').setAttribute('aria-pressed', state.idOthers ? 'true' : 'false');
     document.querySelector('.board-wrap').classList.toggle('identify-on', state.identify);
     panel.hidden = !state.identify;
     if (!state.identify) return;
@@ -371,6 +390,10 @@
       if (best.equivalents.length > 1) info.push('同样成立：' + best.equivalents.slice(1).join('、'));
       if (best.bass) info.push('最低音是 ' + best.bass + '（不是根音）');
       if (info.length) html += '<span class="id-info" id="id-info">' + esc(info.join(' · ')) + '</span>';
+      if (state.idOthers) {
+        html += '<span class="lg-keys id-keys" id="id-keys"><span class="lg-key ghost"><i></i>这个和弦的音在其他位置</span>'
+          + (missing.length ? '<span class="lg-key ghost omit"><i></i>没按到的音</span>' : '') + '</span>';
+      }
       html += '</div>';
     }
     document.getElementById('id-result').innerHTML = html;
@@ -522,6 +545,9 @@
 
     // 识别和弦
     document.getElementById('identify-btn').addEventListener('click', function () { setIdentify(!state.identify); });
+    document.getElementById('id-others-btn').addEventListener('click', function () {
+      state.idOthers = !state.idOthers; saveState(); renderDots(); renderIdentify();
+    });
     document.getElementById('id-clear').addEventListener('click', function () { state.marks = {}; saveState(); renderDots(); renderIdentify(); });
     document.getElementById('fretboard').addEventListener('click', onBoardClick);
 
